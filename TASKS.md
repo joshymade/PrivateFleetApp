@@ -118,15 +118,41 @@ Aligned with [docs/BUILD_PLAN.md](docs/BUILD_PLAN.md) **Phased MVP build order**
 - [ ] Mobile UX + error states; fold remaining legacy surfaces into 5-tab IA
 - [ ] Tighten RLS / company scoping later
 - [ ] Next 16: migrate `src/middleware.ts` → `proxy.ts` (deprecated middleware convention; keep until polish)
+- [ ] Report photo uploader opens the **device camera** by default (not gallery/media library first)
+  - Current: `src/components/camera/photo-capture.tsx` (`PhotoCapture` / used by `DamageCaptureForm`) uses `<input type="file" accept="image/*">` with no `capture`, so mobile often opens the media picker.
+  - Planned: add `capture="environment"` (rear camera) on the Report file input; keep `accept="image/*"`.
+  - Stretch if needed: `getUserMedia` live preview.
+  - Verify on iOS Safari + Android Chrome; desktop keeps file-picker fallback.
+- [ ] Add more **top padding** to the shared app header on all authenticated pages
+  - Shared in `src/app/(app)/layout.tsx` (`px-4 pt-4 pb-4`) + `AppPageHeader` (`src/components/nav/app-page-header.tsx`, `pt-1`).
+  - Bump layout wrapper and/or header `pt-*` once so every `(app)` page gets it.
+  - Prefer safe-area aware padding for notched phones / installed PWA (`env(safe-area-inset-top)`).
+- [ ] Improve GPS quality when submitting damage reports (more accurate / fresher coords from the device)
+  - Current helper: `src/lib/geolocation.ts` — single `getCurrentPosition` with `enableHighAccuracy: true`, `timeout: 10_000`, `maximumAge: 60_000`; only stores lat/lng; silent `null` on deny/fail.
+  - Used from `DamageCaptureForm` (`src/components/damage/damage-capture-form.tsx`) at submit time.
+  - Planned: lower `maximumAge` (or `0`) for a fresh fix; longer timeout and/or short `watchPosition` until accuracy ≤ ~50m or timeout; warm GPS when opening Report (not only on submit); clear UI when permission denied / fix unavailable.
+  - Optional follow-up: persist `accuracy` (needs migration + types) — not required for first pass.
+- [ ] Harden the app into a **true installable PWA** (install prompt, standalone shell, offline, safe areas)
+  - Current: Serwist wired (`src/app/sw.ts`, `src/app/manifest.ts`, `SerwistProvider`, `/~offline`, icons under `public/icons/*`).
+  - Confirm installability on HTTPS: valid manifest, 192/512 + maskable icons, `display: "standalone"`, working SW registration.
+  - Apple / iOS meta: `apple-mobile-web-app-capable`, status-bar style, apple-touch-icon (root layout metadata).
+  - Safe-area insets for top header + bottom nav in standalone mode.
+  - Offline: keep `/~offline` fallback; minimal shell caching for auth/app chrome (don’t over-cache authenticated API/R2).
+  - Optional install CTA on Profile or first-run (`beforeinstallprompt` / iOS “Add to Home Screen” hint).
+  - Align `start_url` / scope with post-login entry (e.g. `/` → home).
+  - Smoke test: install on Android Chrome + iOS Safari; offline relaunch; session persists in standalone (Supabase client already notes PWA launches).
+
+**Remaining gaps (Phase 6):** camera capture on Report, shared header top/safe-area padding, mobile GPS quality on damage reports, true-PWA hardening, plus Mobile UX/errors, RLS/company scoping, and middleware→`proxy.ts`.
 
 ### Later (not MVP-blocking)
 
 1. Company / fleet scoping without weakening insert checks
 2. Generated DB types (`supabase gen types`) instead of hand-typed rows
-3. Offline/PWA polish, photo compression
+3. Photo compression; any leftover offline/PWA polish beyond Phase 6 true-PWA hardening
 4. Deploy / hosting env parity
 5. Optional DB rename noticed → viewed identifiers
 6. Push / OS notifications (MVP is in-app Feed list only)
+7. Optional: persist GPS `accuracy` on damage reports (migration + types)
 
 ---
 
@@ -160,7 +186,7 @@ Full checklists: [supabase-env-checklist.md](docs/supabase-env-checklist.md), [r
 - [x] `R2_PUBLIC_URL` public/CDN base set (`*.r2.dev`)
 - [x] Switched primary backend from self-hosted to Supabase Cloud
 
-**Scaffold note (historical):** early placeholders folded into 5-tab IA. Phases 1–5 feature routes are implemented; remaining gaps are Phase 6 polish (PWA icons, middleware→proxy, RLS tightening).
+**Scaffold note (historical):** early placeholders folded into 5-tab IA. Phases 1–5 feature routes are implemented; remaining gaps are Phase 6 polish (Report camera capture, header/safe-area padding, mobile GPS quality, true-PWA hardening, Mobile UX, middleware→proxy, RLS tightening).
 
 </details>
 

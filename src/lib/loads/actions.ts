@@ -105,26 +105,6 @@ function parseStops(formData: FormData): { stops: ParsedStop[]; error?: string }
   return { stops };
 }
 
-/**
- * Current trailer = trailer_number of the last checked stop (by delivery_order)
- * that has a non-empty trailer. Null when none.
- */
-function currentTrailerFromCheckedStops(
-  stops: Pick<
-    { trailer_number: string | null; completed: boolean; delivery_order: number },
-    "trailer_number" | "completed" | "delivery_order"
-  >[],
-): string | null {
-  const ordered = [...stops].sort((a, b) => a.delivery_order - b.delivery_order);
-  let current: string | null = null;
-  for (const stop of ordered) {
-    if (!stop.completed) continue;
-    const t = stop.trailer_number?.trim();
-    if (t) current = t;
-  }
-  return current;
-}
-
 const ONE_ACTIVE_LOAD_MESSAGE =
   "You already have an active load. Complete it before starting another.";
 
@@ -161,24 +141,23 @@ async function findActiveLoadConflict(
   return data ?? null;
 }
 
+/**
+ * Align loads.trailer_number with last checked stop that has a trailer.
+ * recordHistory: true when check/uncheck (or promote) makes a trailer current;
+ * false when only editing stop fields (adding a trailer to a stop must not log).
+ */
 async function syncCurrentTrailerFromStops(
   supabase: Awaited<ReturnType<typeof createClient>>,
   loadId: string,
+  options?: { recordHistory?: boolean },
 ): Promise<{ error?: string }> {
-  const { data: stops, error } = await supabase
-    .from("load_stops")
-    .select("trailer_number, completed, delivery_order")
-    .eq("load_id", loadId);
+  const recordHistory = options?.recordHistory ?? true;
+  const { error } = await supabase.rpc("sync_load_current_trailer", {
+    p_load_id: loadId,
+    p_record_history: recordHistory,
+  });
 
   if (error) return { error: error.message };
-
-  const trailerNumber = currentTrailerFromCheckedStops(stops ?? []);
-  const { error: updateError } = await supabase
-    .from("loads")
-    .update({ trailer_number: trailerNumber })
-    .eq("id", loadId);
-
-  if (updateError) return { error: updateError.message };
   return {};
 }
 
@@ -355,8 +334,11 @@ export async function updateLoad(
     if (stopsError) return { error: stopsError.message };
   }
 
-  // Keep current trailer aligned with checked stops after stop edits.
-  const sync = await syncCurrentTrailerFromStops(supabase, loadId);
+  // Keep current trailer aligned after stop edits; do not write history
+  // (adding/editing stop trailer_number is not "became current").
+  const sync = await syncCurrentTrailerFromStops(supabase, loadId, {
+    recordHistory: false,
+  });
   if (sync.error) return { error: sync.error };
 
   revalidatePath("/home");

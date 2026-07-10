@@ -53,7 +53,7 @@ export type LoadStop = {
   stop_type: LoadStopType;
   stop_name: string;
   pickup_number: string | null;
-  /** Trailer picked up at this stop; may sync to loads.trailer_number. */
+  /** Trailer picked up at this stop; becomes current only when stop is checked. */
   trailer_number: string | null;
   delivery_order: number;
   /**
@@ -65,6 +65,7 @@ export type LoadStop = {
   created_at: string;
 };
 
+/** Audit row when a trailer becomes current (not when merely added to a stop). */
 export type LoadTrailerHistory = {
   id: string;
   load_id: string;

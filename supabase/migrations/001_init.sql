@@ -538,16 +538,37 @@ create trigger loads_set_updated_at
   before update on public.loads
   for each row execute function public.set_updated_at();
 
+-- History when trailer becomes current. See also 027_trailer_history_on_current_only.sql
+-- (consecutive-dupe guard + sync_load_current_trailer RPC for silent form-edit sync).
 create or replace function public.log_trailer_swap()
 returns trigger
 language plpgsql
 security definer
 set search_path = public
 as $$
+declare
+  last_trailer text;
+  skip_history text;
 begin
+  skip_history := nullif(current_setting('app.skip_trailer_history', true), '');
+  if skip_history = 'on' then
+    return new;
+  end if;
+
   if tg_op = 'UPDATE'
      and new.trailer_number is distinct from old.trailer_number
      and new.trailer_number is not null then
+    select h.trailer_number
+      into last_trailer
+      from public.load_trailer_history h
+     where h.load_id = new.id
+     order by h.changed_at desc
+     limit 1;
+
+    if last_trailer is not distinct from new.trailer_number then
+      return new;
+    end if;
+
     insert into public.load_trailer_history (load_id, trailer_number, changed_by)
     values (new.id, new.trailer_number, (select auth.uid()));
   end if;
