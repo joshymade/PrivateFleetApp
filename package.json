@@ -2,6 +2,9 @@
   "name": "privatefleet",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -14,14 +17,6 @@
     "@serwist/turbopack": "^9.5.11",
     "@supabase/ssr": "^0.12.0",
     "@supabase/supabase-js": "^2.110.2",
-    "lucide-react": "^1.24.0",
-    "next": "16.2.10",
-    "react": "19.2.4",
-    "react-dom": "19.2.4",
-    "resend": "^6.17.2",
-    "serwist": "^9.5.11"
-  },
-  "devDependencies": {
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",
@@ -29,9 +24,17 @@
     "@types/serviceworker": "^0.0.199",
     "babel-plugin-react-compiler": "1.0.0",
     "esbuild": "^0.28.1",
-    "eslint": "^9",
-    "eslint-config-next": "16.2.10",
+    "lucide-react": "^1.24.0",
+    "next": "16.2.10",
+    "react": "19.2.4",
+    "react-dom": "19.2.4",
+    "resend": "^6.17.2",
+    "serwist": "^9.5.11",
     "tailwindcss": "^4",
     "typescript": "^5"
+  },
+  "devDependencies": {
+    "eslint": "^9",
+    "eslint-config-next": "16.2.10"
   }
 }

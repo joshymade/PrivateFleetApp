@@ -51,6 +51,8 @@ Copy from `.env.local.example`, then fill:
 
 `DATABASE_URL` / `DIRECT_URL` are **optional** for the Next.js app. Use Dashboard connection strings only if you run `psql` / CLI migrations from your machine.
 
+Deploying on **Easypanel / Nixpacks**? See [easypanel-deploy.md](easypanel-deploy.md) — especially set `NEXT_PUBLIC_*` for the **build** phase.
+
 ---
 
 ## C) After env is set — verify
