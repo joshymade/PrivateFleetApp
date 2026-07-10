@@ -1,0 +1,28 @@
+---
+description: Next.js 16 App Router and React conventions for this repo
+globs: src/app/**/*.{ts,tsx},src/middleware.ts,next.config.ts
+alwaysApply: false
+---
+
+# Next.js / App Router
+
+This is **Next.js 16**, not classic Next 13/14 training data. Before new APIs or file conventions, check `node_modules/next/dist/docs/` and heed deprecations (`AGENTS.md`).
+
+## Conventions in this repo
+
+- App code lives under `src/app` (not root `app/`).
+- Route groups: `(auth)` for unauthenticated pages, `(app)` for the driver shell.
+- Middleware: `src/middleware.ts` → `updateSession` from `@/lib/supabase/middleware`. Keep Serwist/static paths excluded in `matcher`.
+- `reactCompiler: true` in `next.config.ts` — avoid unnecessary `useMemo`/`useCallback` unless profiling shows need.
+- Prefer Server Components by default; add `"use client"` only for camera, geo, canvas, interactive forms, or browser Supabase auth UI.
+- Route handlers return `NextResponse.json(...)`; stubs may use `501` until wired.
+
+## PWA touchpoints
+
+- SW entry: `src/app/sw.ts`; provider wraps root layout via `@/components/pwa/serwist-provider`.
+- Offline fallback page: `src/app/~offline/page.tsx`.
+- Do not break Serwist routes (`/serwist/*`) or the middleware exclusion list.
+
+## Env
+
+Document new vars in `.env.local.example` only (names, no secrets). Public: `NEXT_PUBLIC_*`. Server-only: `SUPABASE_SERVICE_ROLE_KEY`, `R2_*`, `DATABASE_URL` / `DIRECT_URL`.

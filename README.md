@@ -1,36 +1,42 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# PrivateFleet
 
-## Getting Started
+Mobile-first PWA for a private truck fleet: drivers log loads and capture trailer/tractor damage photos; Safety reviews damage and an inbox of items sent for review; Admins manage users and have fleet-wide visibility.
 
-First, run the development server:
+## Who it’s for
+
+| Role | Focus |
+| --- | --- |
+| **Driver** | Unique Driver ID at signup; log loads; upload trailer & tractor damage; send photos to Safety |
+| **Safety** | View fleet damage (trailer + tractor); mark images **viewed**; work the Safety inbox |
+| **Admin** | Manage users/roles; full visibility into loads, damage, and inbox |
+
+Canonical product plan: **[docs/BUILD_PLAN.md](docs/BUILD_PLAN.md)**.
+
+## Stack
+
+- **Next.js 16** App Router (`src/app`), React 19, React Compiler
+- **Tailwind CSS v4**
+- **Supabase Cloud**: Auth + Postgres + RLS
+- **Cloudflare R2** for damage photos
+- **Serwist** PWA
+
+## Docs
+
+| Doc | Purpose |
+| --- | --- |
+| [docs/BUILD_PLAN.md](docs/BUILD_PLAN.md) | Product vision, roles, flows, IA, data model, MVP phases |
+| [TASKS.md](TASKS.md) | Status checklist (infra + build tasks) |
+| [docs/supabase-env-checklist.md](docs/supabase-env-checklist.md) | Supabase Cloud / env wiring |
+| [docs/r2-setup.md](docs/r2-setup.md) | Cloudflare R2 setup |
+
+## Local development
 
 ```bash
+npm install
+cp .env.local.example .env.local   # then fill values (never commit .env.local)
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
-
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Env variable names only are listed in `.env.local.example` and the docs above — do not put secrets in this README.

@@ -14,9 +14,11 @@
     "@serwist/turbopack": "^9.5.11",
     "@supabase/ssr": "^0.12.0",
     "@supabase/supabase-js": "^2.110.2",
+    "lucide-react": "^1.24.0",
     "next": "16.2.10",
     "react": "19.2.4",
     "react-dom": "19.2.4",
+    "resend": "^6.17.2",
     "serwist": "^9.5.11"
   },
   "devDependencies": {

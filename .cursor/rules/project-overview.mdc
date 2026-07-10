@@ -1,0 +1,54 @@
+---
+description: PrivateFleet product domain, stack, and folder conventions
+alwaysApply: true
+---
+
+# PrivateFleet Overview
+
+Mobile-first PWA for a private truck fleet: loads + trailer/tractor damage photos, Safety review/inbox, Admin users/roles.
+
+Canonical plan: `docs/BUILD_PLAN.md`.
+
+## Roles (MVP)
+
+- **Driver** — unique `driver_id` at signup; log loads; upload trailer & tractor damage; send own images to Safety inbox.
+- **Safety** — view-only fleet trailer/tractor damage; mark **viewed** (maps to `damage_notices` / noticed); Safety inbox of driver referrals.
+- **Admin** — manage users/roles; full visibility; loads oversight. No exotic admin tooling.
+
+## Stack
+
+- **Next.js 16** App Router (`src/app`), React 19, React Compiler on
+- **Tailwind CSS v4** (`@import "tailwindcss"` in `globals.css`)
+- **Supabase Cloud**: Auth + Postgres + RLS — `@supabase/ssr` + `@supabase/supabase-js`
+- **Cloudflare R2** for damage photos (S3 SDK); metadata in Postgres
+- **Serwist** PWA (`@serwist/turbopack`)
+
+## Source layout
+
+- `src/app/(auth)/` — login, signup
+- `src/app/(app)/` — dashboard, damage/*, tractor/*, safety/inbox, admin/users, export (bottom nav shell; role-aware)
+- `src/app/api/` — route handlers (`health`, `uploads/presign`)
+- `src/lib/supabase/` — browser, server, middleware clients
+- `src/lib/r2.ts`, `src/lib/canvas-export.ts`
+- `src/components/{auth,camera,damage,export,loads,pwa,safety,admin}/`
+- `src/types/database.ts` — hand-typed row shapes until `supabase gen types`
+- `supabase/migrations/` — schema source of truth
+
+## Path alias
+
+Use `@/*` → `src/*` (see `tsconfig.json`).
+
+## Product rules
+
+- Signup must pass `driver_id` in auth user metadata for drivers (profile trigger reads it).
+- Planned: `profiles.role` (`driver` | `safety` | `admin`); tractor via `asset_type` (or equivalent); Safety inbox/referrals table.
+- Damage photos → R2; DB stores `r2_key` / optional `r2_url` + GPS + timestamp + asset/driver snapshots.
+- **Viewed** = new notice/view row (`damage_notices` today), never duplicate photos. Drivers send-to-Safety ≠ viewed.
+- Canvas export: photo + white metadata strip → composite JPG.
+- Prefer mobile (`max-w-lg`), touch-friendly UI; keep bottom nav in `(app)/layout`.
+
+## Do not
+
+- Commit `.env.local` or put secrets in rules/docs.
+- Invent schema columns — extend via new migrations + update `src/types/database.ts`.
+- Bypass RLS with the service role from the browser.

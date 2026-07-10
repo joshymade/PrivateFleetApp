@@ -1,0 +1,46 @@
+---
+description: Supabase clients, auth, RLS, and schema patterns
+globs: src/lib/supabase/**/*.{ts,tsx},src/types/database.ts,supabase/**/*.sql,src/app/(auth)/**/*.{ts,tsx},src/middleware.ts
+alwaysApply: false
+---
+
+# Supabase
+
+## Clients (do not invent new factories)
+
+| Context | Import |
+|---------|--------|
+| Browser / client components | `createClient` from `@/lib/supabase/client` |
+| Server Components, actions, route handlers | `await createClient()` from `@/lib/supabase/server` |
+| Middleware session refresh | `updateSession` from `@/lib/supabase/middleware` |
+
+Use the **anon** key in these clients. Reserve `SUPABASE_SERVICE_ROLE_KEY` for trusted server-only admin work; never expose it to the client.
+
+## Auth / profiles
+
+- Sign up with email, password, and unique company **Driver ID**.
+- Pass `driver_id` (and optional `full_name`) in `raw_user_meta_data` so `handle_new_user` can insert `public.profiles`.
+- Browser client keeps localStorage sessions for PWA re-launches.
+- Middleware must call `auth.getUser()` so cookies refresh for SSR.
+
+## Schema
+
+- Source of truth: `supabase/migrations/*.sql` (start with `001_init.sql`). Apply/verify via Supabase MCP — see `supabase-mcp.mdc`.
+- Mirror row shapes in `src/types/database.ts` until generated types exist.
+- Core tables: `profiles` (incl. `role`), `loads`, `load_stops`, `load_trailer_history`, `damage_reports` (`asset_type` + `asset_number` + `report_comment`), `damage_notices` (product: viewed), `damage_report_comments` (Feed replies), `safety_inbox_items`.
+- View: `damage_reports_with_notice_count` for search UI (`security_invoker`).
+- Trailer swaps on `loads.trailer_number` are audited by trigger → `load_trailer_history`.
+- Signup always creates `role = driver`; Admin (or service role) promotes safety/admin. `driver_id` unique when not null.
+
+## RLS (current intent)
+
+- Authenticated fleet can read shared load/damage data.
+- Damage inserts: drivers only, `reported_by = auth.uid()`.
+- Notice (`damage_notices`): any authenticated user can insert/delete own notice.
+- Safety inbox: drivers insert for own reports; Safety/Admin select/update.
+- Role changes: Admin update policy + trigger `enforce_profile_role_change`.
+- Tighten company-scoped policies later — do not weaken insert checks.
+
+## Env names
+
+`NEXT_PUBLIC_SUPABASE_URL` (`https://<ref>.supabase.co`), `NEXT_PUBLIC_SUPABASE_ANON_KEY` (publishable or legacy anon), `SUPABASE_SERVICE_ROLE_KEY` (server-only). Optional `DATABASE_URL` / `DIRECT_URL` for CLI tooling — see `.env.local.example`.

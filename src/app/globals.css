@@ -1,26 +1,130 @@
 @import "tailwindcss";
 
+/* Class-based dark mode (set on <html>) — not prefers-color-scheme alone */
+@custom-variant dark (&:where(.dark, .dark *));
+
 :root {
+  /* Brand — logo shield blue + Texas gold */
+  --brand: #14549e;
+  --brand-strong: #0f2f6b;
+  --brand-soft: #2369ae;
+  --brand-panel: #0f2f6b;
+  --accent: #fab407;
+  --accent-foreground: #0f2f6b;
+
+  /* Light: white surfaces, brand blues + gold accents */
   --background: #ffffff;
-  --foreground: #171717;
+  --foreground: #0f2f6b;
+  --card: #ffffff;
+  --card-foreground: #0f2f6b;
+  --muted: #f0f5fb;
+  --muted-foreground: #4a6280;
+  --border: #d4e0ef;
+  --input: #d4e0ef;
+  --primary: #14549e;
+  --primary-foreground: #ffffff;
+  --ring: #fab407;
+  --destructive: #dc2626;
+  --nav: #ffffff;
+  --nav-border: #d4e0ef;
+}
+
+.dark {
+  /* Brand accents on B/W/gray (sparing) */
+  --brand: #5b9bd5;
+  --brand-strong: #8bb8e0;
+  --brand-soft: #2a3a4d;
+  --brand-panel: #1a1a1a;
+  --accent: #fcb80d;
+  --accent-foreground: #0a0a0a;
+
+  /* Dark: black / white / gray — high contrast, professional */
+  --background: #0a0a0a;
+  --foreground: #f5f5f5;
+  --card: #141414;
+  --card-foreground: #f5f5f5;
+  --muted: #1f1f1f;
+  --muted-foreground: #a3a3a3;
+  --border: #2e2e2e;
+  --input: #2e2e2e;
+  --primary: #f5f5f5;
+  --primary-foreground: #0a0a0a;
+  --ring: #fcb80d;
+  --destructive: #f87171;
+  --nav: #0a0a0a;
+  --nav-border: #2e2e2e;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-ring: var(--ring);
+  --color-destructive: var(--destructive);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-brand: var(--brand);
+  --color-brand-strong: var(--brand-strong);
+  --color-brand-panel: var(--brand-panel);
+  --color-nav: var(--nav);
+  --color-nav-border: var(--nav-border);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+  /* ~2.6s cycle: nudge left, settle, pause — loops for mobile (no hover) */
+  --animate-back-truck-nudge: back-truck-nudge 2.6s ease-in-out infinite;
+  /* Soft opacity pulse for Feed unread badge / label */
+  --animate-feed-badge-pulse: feed-badge-pulse 2.2s ease-in-out infinite;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+@keyframes back-truck-nudge {
+  0%,
+  12% {
+    transform: translateX(0);
+  }
+  28% {
+    transform: translateX(-8px);
+  }
+  44%,
+  100% {
+    transform: translateX(0);
+  }
+}
+
+@keyframes feed-badge-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.72;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  @keyframes back-truck-nudge {
+    0%,
+    100% {
+      transform: translateX(0);
+    }
+  }
+
+  @keyframes feed-badge-pulse {
+    0%,
+    100% {
+      opacity: 1;
+    }
   }
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-geist-sans), system-ui, sans-serif;
 }

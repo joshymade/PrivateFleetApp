@@ -1,0 +1,28 @@
+---
+description: Mobile-first UI and Serwist PWA patterns
+globs: src/app/**/*.{ts,tsx,css},src/components/**/*.{ts,tsx},src/app/sw.ts
+alwaysApply: false
+---
+
+# UI & PWA
+
+## Layout
+
+- Driver shell: `src/app/(app)/layout.tsx` — fixed bottom nav (Loads, Damage, Search, Export), `pb-20` for content.
+- Content width: `mx-auto w-full max-w-lg` (auth: `max-w-md`).
+- Styling: Tailwind v4 utility classes; theme tokens in `globals.css` (`@theme inline`). Fonts: Geist via CSS variables from root layout.
+- Prefer large tap targets; portrait / standalone PWA (`manifest.ts`).
+
+## Components
+
+Colocate by domain under `src/components/{auth,camera,damage,export,loads,pwa}/`. Re-export Serwist provider from `pwa/serwist-provider.tsx` (do not import `@serwist/turbopack/react` ad hoc elsewhere).
+
+## Service worker
+
+- Edit `src/app/sw.ts` carefully; keep offline document fallback to `/~offline`.
+- Root layout wraps children with `<SerwistProvider swUrl="/serwist/sw.js">`.
+- Middleware must continue excluding `/serwist/` and static icon assets.
+
+## Product copy
+
+App name is **PrivateFleet** (metadata / manifest). Keep UI copy driver-oriented (loads, trailers, damage, noticed).

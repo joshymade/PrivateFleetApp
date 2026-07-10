@@ -1,0 +1,35 @@
+---
+description: Damage capture, R2 uploads, notices, and canvas export
+globs: src/lib/r2.ts,src/lib/canvas-export.ts,src/app/api/uploads/**/*,src/app/(app)/damage/**/*,src/app/(app)/export/**/*,src/components/{camera,damage,export}/**/*
+alwaysApply: false
+---
+
+# Damage, R2, and Export
+
+## Capture flow
+
+1. Camera photo (device API) + Geolocation (lat/lng).
+2. Presign upload via `POST /api/uploads/presign` (auth required).
+3. PUT image to Cloudflare R2 using the presigned URL (browser needs R2 CORS).
+4. Insert `damage_reports` with: `asset_type`, `asset_number`, snapshot `driver_id`, `reported_by`, optional `load_id` / `route_number`, GPS, `captured_at`, `report_comment`, unique `r2_key`, optional `r2_url`.
+
+Photos live in R2 only — do not store image blobs in Postgres. No MVP columns for content type / byte size (type is on the signed PUT).
+
+## R2 helpers
+
+- Config: `getR2Config()` in `@/lib/r2` (`R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET_NAME`, `R2_PUBLIC_URL`).
+- Use `@aws-sdk/client-s3` + `@aws-sdk/s3-request-presigner` on the server.
+- Keys: `damage/{assetType}/{assetNumber}/{uuid}.{ext}` — unique via UUID + `r2_key` unique constraint.
+- Display: Feed uses `r2_url` or rebuilds from `R2_PUBLIC_URL` + `r2_key` (public/CDN base required; not the S3 API host). See `docs/r2-setup.md`.
+
+## Search & Noticed
+
+- Search by trailer number; prefer `damage_reports_with_notice_count`.
+- "Noticed" inserts into `damage_notices` (`unique (damage_report_id, noticed_by)`). Never re-upload the same damage photo for validation.
+
+## Canvas export
+
+- Implement in `@/lib/canvas-export` (`compositeDamageJpg`).
+- Draw photo, append solid white strip, render metadata (trailer #, driver ID, GPS, timestamp, route), download as JPG.
+- UI under `(app)/export`; keep heavy canvas work client-side.
+- **Do not** `fetch()` the public R2 URL from the browser for export — that hits CORS ("Failed to fetch") even when Feed `<img>` works. Load bytes via auth `GET /api/exports/image?key=<r2_key>` (server `GetObject` in `@/lib/r2`).

@@ -1,0 +1,43 @@
+---
+description: Apply DB/schema changes via Supabase MCP; keep migrations as repo source of truth
+globs: supabase/**/*.sql,src/types/database.ts,src/lib/supabase/**/*.{ts,tsx}
+alwaysApply: false
+---
+
+# Supabase MCP — apply DB changes
+
+Primary backend: **Supabase Cloud** project `mvrbfyoujggqazsicgal` (`https://mvrbfyoujggqazsicgal.supabase.co`). Repo migrations remain the source of truth; MCP applies/verifies against that project.
+
+## When changing schema, RLS, triggers, views, or DB settings
+
+1. Add a **new** file under `supabase/migrations/` (do not casually rewrite already-applied history).
+2. **Apply** the change via Supabase MCP — do not leave SQL only on disk.
+3. Update `src/types/database.ts` to match (hand-typed until `supabase gen types`).
+4. Verify with MCP (`list_tables` / `list_migrations` / read-only `execute_sql`) when available.
+
+## Auth / discovery
+
+- Prefer **`plugin-supabase-supabase`** (Cursor Supabase plugin) or project MCP server **`supabase`** → hosted `https://mcp.supabase.com/mcp?project_ref=mvrbfyoujggqazsicgal…`.
+- If `serverStatus` is `needsAuth` or tools fail with auth errors: call **`mcp_auth`**, then re-discover tools with `GetMcpTools` before SQL/migrations.
+- If discovery is `error` / tools unavailable: fix MCP connection first; until then use the Dashboard SQL editor with the same migration file.
+
+## Preferred MCP tools (when connected)
+
+| Tool | Use for |
+|------|---------|
+| `apply_migration` | DDL / schema, RLS, triggers, views (tracked migrations) |
+| `execute_sql` | Ad-hoc SQL, verification queries (not a substitute for migration files) |
+| `list_tables` | Inspect tables/columns after changes |
+| `list_migrations` | Confirm applied migration history |
+| `list_extensions` | Check Postgres extensions |
+| `generate_typescript_types` | Optional aid; still keep `src/types/database.ts` in sync |
+
+Discover live schemas with `GetMcpTools` before calling tools — names/args can change.
+
+## Fallback (no MCP)
+
+1. Still add/update `supabase/migrations/*.sql` in the repo.
+2. Apply the same SQL via Supabase Dashboard → SQL Editor, or `psql` with a Dashboard connection string.
+3. Update `src/types/database.ts` the same way.
+
+Never put secrets in rules. Never commit `.env.local`.

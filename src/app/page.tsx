@@ -1,6 +1,11 @@
 import { redirect } from "next/navigation";
+import { createClient } from "@/lib/supabase/server";
 
-export default function HomePage() {
-  // Auth wiring comes later; default to login for the bootstrap shell.
-  redirect("/login");
+export default async function RootPage() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  redirect(user ? "/home" : "/login");
 }
