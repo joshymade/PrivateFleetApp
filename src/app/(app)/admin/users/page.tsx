@@ -9,7 +9,7 @@ import type { Profile } from "@/types/database";
 export default async function AdminUsersPage() {
   const session = await getSessionProfile();
   if (!session || !canAccessAdminUsers(session.role)) {
-    redirect("/profile");
+    redirect("/account");
   }
 
   const supabase = await createClient();
@@ -23,8 +23,8 @@ export default async function AdminUsersPage() {
   return (
     <main className="flex flex-col gap-4 p-6">
       <div>
-        <BackLink href="/profile" aria-label="Back to Profile">
-          Profile
+        <BackLink href="/account" aria-label="Back to Account">
+          Account
         </BackLink>
         <h1 className={`mt-2 ${pageTitleClassName}`}>Manage users</h1>
         <p className="mt-2 text-sm text-muted-foreground">

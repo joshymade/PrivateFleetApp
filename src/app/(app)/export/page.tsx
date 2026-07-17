@@ -158,8 +158,8 @@ export default async function ExportPage({ searchParams }: PageProps) {
 
   return (
     <main className="mx-auto w-full max-w-lg px-4 pb-8 pt-4">
-      <BackLink href="/profile" aria-label="Back to Profile">
-        Profile
+      <BackLink href="/account" aria-label="Back to Account">
+        Account
       </BackLink>
       <h1 className={`mt-2 ${pageTitleClassName}`}>Report Export</h1>
       <p className="mt-1 text-sm text-muted-foreground">

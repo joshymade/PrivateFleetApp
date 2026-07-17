@@ -90,10 +90,12 @@ function buildNavItems(
   }
 
   items.push({
-    href: "/profile",
-    label: "Profile",
+    href: "/account",
+    label: "Account",
     icon: UserRound,
     match: (p) =>
+      p === "/account" ||
+      p.startsWith("/account/") ||
       p === "/profile" ||
       p.startsWith("/profile/") ||
       p.startsWith("/admin/") ||
@@ -107,7 +109,7 @@ export function BottomNav({
   role,
   unreadNotifications = 0,
   profileIncomplete = false,
-  profileSetupHref = "/profile?setup=1",
+  profileSetupHref = "/account?setup=1",
 }: {
   role: UserRole;
   unreadNotifications?: number;

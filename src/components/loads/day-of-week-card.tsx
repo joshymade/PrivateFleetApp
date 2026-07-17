@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { CurrentTrailerField } from "@/components/loads/current-trailer-field";
 import { StopCompletedToggle } from "@/components/loads/stop-completed-toggle";
+import { StopTrailerField } from "@/components/loads/stop-trailer-field";
 import { driverIdClassName } from "@/components/ui/driver-id";
 import {
   formatDayOfWeek,
@@ -98,12 +99,12 @@ export function DayOfWeekCard({
                   />
                 </dd>
               </div>
-              {load.assigned_miles != null ? (
+              {load.paid_miles != null ? (
                 <div>
                   <dt className="text-muted-foreground dark:text-white/60">
-                    Miles
+                    Paid miles
                   </dt>
-                  <dd className="mt-0.5 font-medium">{load.assigned_miles}</dd>
+                  <dd className="mt-0.5 font-medium">{load.paid_miles}</dd>
                 </div>
               ) : null}
               {load.route_number ? (
@@ -116,7 +117,7 @@ export function DayOfWeekCard({
               ) : null}
             </dl>
             {load.load_stops.length > 0 ? (
-              <ol className="space-y-0.5 border-t border-border pt-3 text-sm text-foreground/90 dark:border-white/20 dark:text-white/90">
+              <ol className="space-y-2 border-t border-border pt-3 text-sm text-foreground/90 dark:border-white/20 dark:text-white/90">
                 {load.load_stops.map((stop) => (
                   <li key={stop.id}>
                     <StopCompletedToggle
@@ -145,13 +146,14 @@ export function DayOfWeekCard({
                           </span>
                         </>
                       ) : null}
-                      {stop.trailer_number ? (
-                        <span className="text-muted-foreground dark:text-white/60">
-                          {" "}
-                          · Trl {stop.trailer_number}
-                        </span>
-                      ) : null}
                     </StopCompletedToggle>
+                    <StopTrailerField
+                      key={`${stop.id}-${stop.trailer_number ?? ""}`}
+                      stopId={stop.id}
+                      trailerNumber={stop.trailer_number}
+                      canEdit={canManage}
+                      variant="panel"
+                    />
                   </li>
                 ))}
               </ol>

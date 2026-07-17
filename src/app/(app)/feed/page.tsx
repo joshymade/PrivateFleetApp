@@ -7,7 +7,6 @@ import {
   FeedWeekCards,
   type FeedWeekCardItem,
 } from "@/components/feed/feed-week-cards";
-import { NotificationsList } from "@/components/feed/notifications-list";
 import { pageTitleClassName } from "@/components/ui/page-title";
 import { damagePhotoUrl } from "@/lib/damage-photo";
 import {
@@ -20,7 +19,6 @@ import {
 } from "@/lib/feed/iso-week";
 import { createClient } from "@/lib/supabase/server";
 import type {
-  AppNotification,
   AssetType,
   DamageReportWithNoticeCount,
   SafetyInboxStatus,
@@ -127,22 +125,8 @@ export default async function FeedPage({ searchParams }: FeedPageProps) {
     countQuery = countQuery.gte("captured_at", startIso).lt("captured_at", endIso);
   }
 
-  const [
-    { count: totalCountRaw },
-    { data: weekCapturedAt, error: weekError },
-    { data: notifications },
-  ] = await Promise.all([
-    countQuery,
-    weekCountsQuery,
-    supabase
-      .from("notifications")
-      .select(
-        "id, user_id, type, title, body, damage_report_id, safety_inbox_item_id, load_id, actor_id, read_at, created_at",
-      )
-      .eq("user_id", user.id)
-      .order("created_at", { ascending: false })
-      .limit(20),
-  ]);
+  const [{ count: totalCountRaw }, { data: weekCapturedAt, error: weekError }] =
+    await Promise.all([countQuery, weekCountsQuery]);
 
   const totalCount = totalCountRaw ?? 0;
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
@@ -268,7 +252,6 @@ export default async function FeedPage({ searchParams }: FeedPageProps) {
     }
   }
 
-  const notificationRows = (notifications ?? []) as AppNotification[];
   const listError = error ?? weekError;
 
   return (
@@ -286,10 +269,8 @@ export default async function FeedPage({ searchParams }: FeedPageProps) {
           <div className="min-h-12 rounded-xl border border-brand/40 bg-card shadow-sm" />
         }
       >
-        <FeedSearch initialQuery={query} />
+        <FeedSearch key={query} initialQuery={query} />
       </Suspense>
-
-      <NotificationsList notifications={notificationRows} />
 
       <FeedWeekCards
         weeks={weekCards}

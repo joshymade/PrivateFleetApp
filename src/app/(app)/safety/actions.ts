@@ -64,7 +64,7 @@ export async function updateInboxStatus(
   if (updated?.damage_report_id) {
     revalidatePath(`/feed/${updated.damage_report_id}`);
   }
-  revalidatePath("/profile");
+  revalidatePath("/account/notifications");
   revalidatePath("/home");
   return { ok: true };
 }

@@ -56,8 +56,8 @@ export default async function NewLoadPage() {
         <LoadForm
           mode="create"
           defaultDate={todayDateString()}
-          showAssignField={profile?.role === "admin"}
           hasActiveLoad={Boolean(activeLoad)}
+          currentTruckNumber={profile?.current_truck_number ?? null}
         />
       )}
     </main>

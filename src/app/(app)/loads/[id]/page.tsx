@@ -1,12 +1,15 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { ArchiveDeleteLoad } from "@/components/loads/archive-delete-load";
 import { CompleteLoadButton } from "@/components/loads/complete-load-button";
+import { EditPayAmount } from "@/components/loads/edit-pay-amount";
 import { LoadLabel } from "@/components/loads/load-label";
 import { StopCompletedToggle } from "@/components/loads/stop-completed-toggle";
+import { StopTrailerField } from "@/components/loads/stop-trailer-field";
 import { BackLink } from "@/components/nav/back-link";
 import { DriverId, driverIdClassName } from "@/components/ui/driver-id";
 import { pageTitleClassName } from "@/components/ui/page-title";
-import { formatLongDate } from "@/lib/loads/date";
+import { drivenMiles, formatLongDate } from "@/lib/loads/date";
 import {
   formatTrailerSequence,
   statusBadgeClassName,
@@ -27,9 +30,11 @@ export default async function LoadDetailPage({
   if (!load) notFound();
 
   const { userId, profile } = await getSessionProfile();
+  const isOwner = Boolean(userId) && load.assigned_driver_id === userId;
   const canManage =
-    Boolean(userId) &&
-    (profile?.role === "driver" || profile?.role === "admin");
+    isOwner && (profile?.role === "driver" || profile?.role === "admin");
+  const driven = drivenMiles(load.starting_mileage, load.ending_mileage);
+  const departedStops = load.load_stops.filter((s) => s.completed);
 
   return (
     <main className="mx-auto w-full max-w-lg space-y-6 p-4 pb-8">
@@ -67,15 +72,57 @@ export default async function LoadDetailPage({
             </dd>
           </div>
           <div>
-            <dt className="text-muted-foreground">Miles</dt>
+            <dt className="text-muted-foreground">Paid miles</dt>
             <dd className="mt-0.5 font-medium text-foreground">
-              {load.assigned_miles != null ? load.assigned_miles : "—"}
+              {load.paid_miles != null ? load.paid_miles : "—"}
             </dd>
+          </div>
+          <div>
+            <dt className="text-muted-foreground">Starting mileage</dt>
+            <dd className="mt-0.5 font-medium text-foreground">
+              {load.starting_mileage != null ? load.starting_mileage : "—"}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-muted-foreground">Ending mileage</dt>
+            <dd className="mt-0.5 font-medium text-foreground">
+              {load.ending_mileage != null ? load.ending_mileage : "—"}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-muted-foreground">Driven miles</dt>
+            <dd className="mt-0.5 font-medium text-foreground">
+              {driven != null ? driven : "—"}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-muted-foreground">Pay amount</dt>
+            <dd className="mt-0.5 font-medium text-foreground">
+              {load.pay_amount != null
+                ? `$${Number(load.pay_amount).toFixed(2)}`
+                : "—"}
+            </dd>
+            {canManage && load.status === "completed" ? (
+              <dd className="mt-1">
+                <EditPayAmount
+                  loadId={load.id}
+                  currentAmount={
+                    load.pay_amount != null ? Number(load.pay_amount) : null
+                  }
+                />
+              </dd>
+            ) : null}
           </div>
           <div>
             <dt className="text-muted-foreground">Route #</dt>
             <dd className="mt-0.5 font-medium text-foreground">
               {load.route_number ?? "—"}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-muted-foreground">Truck #</dt>
+            <dd className="mt-0.5 font-medium tabular-nums text-foreground">
+              {load.truck_number?.trim() || "—"}
             </dd>
           </div>
           <div>
@@ -100,13 +147,16 @@ export default async function LoadDetailPage({
         {load.load_stops.length === 0 ? (
           <p className="mt-2 text-sm text-muted-foreground">No stops logged.</p>
         ) : (
-          <ol className="mt-2 space-y-1 rounded-2xl border border-border bg-background p-3">
+          <ol className="mt-2 space-y-2 rounded-2xl border border-border bg-background p-3">
             {load.load_stops.map((stop) => (
               <li key={stop.id} className="text-sm">
                 <StopCompletedToggle
                   stopId={stop.id}
                   completed={stop.completed}
-                  canToggle={canManage}
+                  canToggle={
+                    canManage &&
+                    (load.status === "active" || load.status === "pending")
+                  }
                   variant="page"
                 >
                   <span className="font-medium text-muted-foreground">
@@ -125,33 +175,49 @@ export default async function LoadDetailPage({
                       </span>
                     </>
                   ) : null}
-                  {stop.trailer_number ? (
-                    <span className="text-muted-foreground">
-                      {" "}
-                      · Trailer {stop.trailer_number}
-                    </span>
-                  ) : null}
                 </StopCompletedToggle>
+                <StopTrailerField
+                  key={`${stop.id}-${stop.trailer_number ?? ""}`}
+                  stopId={stop.id}
+                  trailerNumber={stop.trailer_number}
+                  canEdit={
+                    canManage &&
+                    (load.status === "active" || load.status === "pending")
+                  }
+                  variant="page"
+                />
               </li>
             ))}
           </ol>
         )}
       </section>
 
-      {load.load_trailer_history.length > 0 ? (
+      {departedStops.length > 0 ? (
         <section>
           <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-            Trailer history
+            Depart History
           </h2>
           <ul className="mt-2 space-y-2 rounded-2xl border border-border bg-background p-4 text-sm">
-            {load.load_trailer_history.map((row) => (
-              <li key={row.id} className="flex justify-between gap-3">
-                <span className="font-medium text-foreground">
-                  {row.trailer_number}
-                </span>
-                <span className="text-muted-foreground">
-                  {new Date(row.changed_at).toLocaleString()}
-                </span>
+            {departedStops.map((stop) => (
+              <li key={stop.id} className="space-y-0.5">
+                <div className="flex justify-between gap-3">
+                  <span className="font-medium text-foreground">
+                    {stop.delivery_order}. {stopTypeLabel(stop.stop_type)} ·{" "}
+                    <span className={stopTypeNameClass(stop.stop_type)}>
+                      {stop.stop_name}
+                    </span>
+                  </span>
+                  <span className="shrink-0 text-muted-foreground">
+                    {stop.arrived_at
+                      ? new Date(stop.arrived_at).toLocaleString()
+                      : "—"}
+                  </span>
+                </div>
+                {stop.trailer_number ? (
+                  <p className="text-xs text-muted-foreground">
+                    Trailer {stop.trailer_number}
+                  </p>
+                ) : null}
               </li>
             ))}
           </ul>
@@ -167,8 +233,16 @@ export default async function LoadDetailPage({
             Edit load
           </Link>
           {load.status === "active" ? (
-            <CompleteLoadButton loadId={load.id} />
+            <CompleteLoadButton
+              loadId={load.id}
+              startingMileage={
+                load.starting_mileage != null
+                  ? Number(load.starting_mileage)
+                  : null
+              }
+            />
           ) : null}
+          <ArchiveDeleteLoad loadId={load.id} status={load.status} />
         </section>
       ) : null}
     </main>

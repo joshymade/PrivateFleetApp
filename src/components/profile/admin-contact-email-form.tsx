@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { updateAdminContactEmail } from "@/app/(app)/profile/actions";
+import { updateAdminContactEmail } from "@/app/(app)/account/actions";
 
 type Props = {
   initialEmail: string | null;

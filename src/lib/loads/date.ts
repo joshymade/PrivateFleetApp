@@ -94,26 +94,79 @@ export function formatMonthLabel(year: number, month: number): string {
   });
 }
 
+/** ISO Monday-based week key (legacy grouping). Prefer workWeekStart for drivers. */
 export function weekKey(dateStr: string): string {
+  return workWeekStart(dateStr, 1);
+}
+
+/**
+ * Start date of the work week containing `dateStr`.
+ * weekStartDay: 0=Sun … 6=Sat (default Friday = 5).
+ */
+export function workWeekStart(dateStr: string, weekStartDay = 5): string {
+  const startDay = ((weekStartDay % 7) + 7) % 7;
   const [y, m, d] = dateStr.split("-").map(Number);
   const date = new Date(y, m - 1, d);
   const day = date.getDay();
-  const mondayOffset = day === 0 ? -6 : 1 - day;
-  const monday = new Date(y, m - 1, d + mondayOffset);
-  return toDateString(monday);
+  const diff = (day - startDay + 7) % 7;
+  const start = new Date(y, m - 1, d - diff);
+  return toDateString(start);
 }
 
-export function formatWeekLabel(mondayStr: string): string {
-  const [y, m, d] = mondayStr.split("-").map(Number);
-  const monday = new Date(y, m - 1, d);
-  const sunday = new Date(y, m - 1, d + 6);
-  const start = monday.toLocaleDateString(undefined, {
+/** Seven YYYY-MM-DD dates starting at weekStartStr. */
+export function workWeekDays(weekStartStr: string): string[] {
+  const [y, m, d] = weekStartStr.split("-").map(Number);
+  return Array.from({ length: 7 }, (_, i) =>
+    toDateString(new Date(y, m - 1, d + i)),
+  );
+}
+
+export function formatWeekLabel(weekStartStr: string): string {
+  const [y, m, d] = weekStartStr.split("-").map(Number);
+  const startDate = new Date(y, m - 1, d);
+  const endDate = new Date(y, m - 1, d + 6);
+  const start = startDate.toLocaleDateString(undefined, {
     month: "short",
     day: "numeric",
   });
-  const end = sunday.toLocaleDateString(undefined, {
+  const end = endDate.toLocaleDateString(undefined, {
     month: "short",
     day: "numeric",
   });
   return `Week of ${start} – ${end}`;
 }
+
+export function formatCardWeekday(dateStr: string): string {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString(undefined, {
+    weekday: "long",
+  });
+}
+
+export function formatCardMonthDay(dateStr: string): string {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+  });
+}
+
+/** Driven miles from odometer pair; null if incomplete. */
+export function drivenMiles(
+  starting: number | null | undefined,
+  ending: number | null | undefined,
+): number | null {
+  if (starting == null || ending == null) return null;
+  const value = Number(ending) - Number(starting);
+  return Number.isFinite(value) ? value : null;
+}
+
+export const WEEKDAY_LABELS = [
+  "Sunday",
+  "Monday",
+  "Tuesday",
+  "Wednesday",
+  "Thursday",
+  "Friday",
+  "Saturday",
+] as const;

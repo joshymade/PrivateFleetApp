@@ -9,6 +9,7 @@ import { ReportViewTracker } from "@/components/feed/report-view-tracker";
 import { SendToSafetyButton } from "@/components/feed/send-to-safety-button";
 import { StateIcon } from "@/components/icons";
 import { BackLink } from "@/components/nav/back-link";
+import { ClickableTooltip } from "@/components/ui/clickable-tooltip";
 import { DriverId } from "@/components/ui/driver-id";
 import { LocationLink } from "@/components/ui/location-link";
 import {
@@ -17,7 +18,10 @@ import {
 } from "@/components/ui/page-title";
 import { canViewDriverId } from "@/lib/auth/driver-id-visibility";
 import { damagePhotoUrl } from "@/lib/damage-photo";
-import { safetyInboxStatusLabel } from "@/lib/feed/safety-status";
+import {
+  safetyInboxStatusClassName,
+  safetyInboxStatusLabel,
+} from "@/lib/feed/safety-status";
 import { formatFeedTimestamp } from "@/lib/format-time";
 import { displayFirstOrFull } from "@/lib/profile-name";
 import { createClient } from "@/lib/supabase/server";
@@ -225,6 +229,7 @@ export default async function FeedReportDetailPage({ params }: PageProps) {
   const inboxStatus =
     (inboxReferral?.status as SafetyInboxStatus | undefined) ?? null;
   const safetyStatusLabel = safetyInboxStatusLabel(inboxStatus);
+  const safetyStatusClass = safetyInboxStatusClassName(inboxStatus);
 
   return (
     <main className="mx-auto w-full max-w-lg px-4 pb-8 pt-4">
@@ -307,7 +312,21 @@ export default async function FeedReportDetailPage({ params }: PageProps) {
           <div className="flex justify-between gap-4">
             {safetyStatusLabel || noticeCount > 0 ? (
               <dt className="flex flex-col gap-1 text-muted-foreground">
-                {safetyStatusLabel ? <span>{safetyStatusLabel}</span> : null}
+                {safetyStatusLabel ? (
+                  inboxStatus === "pending" ? (
+                    <ClickableTooltip
+                      ariaLabel="Safety Notified: learn more"
+                      className={safetyStatusClass}
+                      content="This damage report was submitted to the Safety Team by the reporting driver."
+                    >
+                      {safetyStatusLabel}
+                    </ClickableTooltip>
+                  ) : (
+                    <span className={safetyStatusClass}>
+                      {safetyStatusLabel}
+                    </span>
+                  )
+                ) : null}
                 {noticeCount > 0 ? (
                   <span
                     className="inline-flex items-center gap-1"

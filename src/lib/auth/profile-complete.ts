@@ -30,7 +30,7 @@ export function driverNeedsProfileSetup(
   return role === "driver" && !isProfileComplete(profile);
 }
 
-export const PROFILE_SETUP_PATH = "/profile?setup=1";
+export const PROFILE_SETUP_PATH = "/account?setup=1";
 
 export const PROFILE_INCOMPLETE_MESSAGE =
   "Complete your profile (first name and work state) before continuing.";

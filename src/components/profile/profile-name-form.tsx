@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
-import { updateProfileName } from "@/app/(app)/profile/actions";
+import { updateProfileName } from "@/app/(app)/account/actions";
 import {
   capitalizeFirst,
   composeFullName,

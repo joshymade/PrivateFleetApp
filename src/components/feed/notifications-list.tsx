@@ -2,15 +2,13 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useId, useState, useTransition } from "react";
+import { useEffect, useId, useTransition } from "react";
 import {
   markAllNotificationsRead,
   markNotificationRead,
-} from "@/app/(app)/profile/actions";
+} from "@/app/(app)/account/actions";
 import { formatFeedTimestamp } from "@/lib/format-time";
 import type { AppNotification } from "@/types/database";
-
-const PREVIEW_LIMIT = 5;
 
 export function hrefForNotification(n: AppNotification): string | null {
   if (n.type === "inbox_referral" && n.safety_inbox_item_id) {
@@ -24,7 +22,7 @@ export function hrefForNotification(n: AppNotification): string | null {
   return null;
 }
 
-function NotificationRow({
+export function NotificationRow({
   n,
   pending,
   onOpen,
@@ -88,7 +86,7 @@ function NotificationRow({
   );
 }
 
-function NotificationsModal({
+export function NotificationsModal({
   open,
   onClose,
   notifications,
@@ -96,6 +94,7 @@ function NotificationsModal({
   onOpen,
   onMarkAll,
   unreadCount,
+  hasMore,
 }: {
   open: boolean;
   onClose: () => void;
@@ -104,6 +103,8 @@ function NotificationsModal({
   onOpen: (n: AppNotification) => void;
   onMarkAll: () => void;
   unreadCount: number;
+  /** When true, show link to the full notifications page. */
+  hasMore?: boolean;
 }) {
   const titleId = useId();
 
@@ -140,7 +141,7 @@ function NotificationsModal({
       >
         <div className="flex items-center justify-between gap-2 border-b border-border px-5 py-4">
           <h2 id={titleId} className="text-base font-semibold text-foreground">
-            All notifications
+            Notifications
             {unreadCount > 0 ? (
               <span className="ml-2 rounded-full bg-primary px-2 py-0.5 text-[10px] font-semibold text-primary-foreground">
                 {unreadCount}
@@ -153,7 +154,7 @@ function NotificationsModal({
                 type="button"
                 onClick={onMarkAll}
                 disabled={pending}
-                className="text-xs font-medium text-muted-foreground underline-offset-2 hover:underline disabled:opacity-60"
+                className="min-h-11 text-xs font-medium text-muted-foreground underline-offset-2 hover:underline disabled:opacity-60"
               >
                 Mark all read
               </button>
@@ -161,7 +162,7 @@ function NotificationsModal({
             <button
               type="button"
               onClick={onClose}
-              className="text-sm font-medium text-muted-foreground underline-offset-2 hover:underline"
+              className="min-h-11 text-sm font-medium text-muted-foreground underline-offset-2 hover:underline"
             >
               Close
             </button>
@@ -186,11 +187,24 @@ function NotificationsModal({
             </ul>
           )}
         </div>
+
+        {hasMore ? (
+          <div className="border-t border-border px-5 py-3">
+            <Link
+              href="/account/notifications"
+              onClick={onClose}
+              className="flex min-h-11 w-full items-center justify-center rounded-lg border border-border bg-background text-sm font-medium text-foreground"
+            >
+              View all notifications
+            </Link>
+          </div>
+        ) : null}
       </div>
     </div>
   );
 }
 
+/** Full scrollable notifications list (account page). */
 export function NotificationsList({
   notifications,
 }: {
@@ -198,10 +212,7 @@ export function NotificationsList({
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
-  const [modalOpen, setModalOpen] = useState(false);
-  const unread = notifications.filter((n) => !n.read_at);
-  const unreadCount = unread.length;
-  const preview = unread.slice(0, PREVIEW_LIMIT);
+  const unreadCount = notifications.filter((n) => !n.read_at).length;
 
   function onOpen(n: AppNotification) {
     const href = hrefForNotification(n);
@@ -225,7 +236,7 @@ export function NotificationsList({
     <section className="rounded-2xl border border-border bg-card p-4">
       <div className="flex items-center justify-between gap-2">
         <h2 className="text-sm font-semibold text-foreground">
-          Latest Notifications
+          Notifications
           {unreadCount > 0 ? (
             <span className="ml-2 rounded-full bg-primary px-2 py-0.5 text-[10px] font-semibold text-primary-foreground">
               {unreadCount}
@@ -237,22 +248,20 @@ export function NotificationsList({
             type="button"
             onClick={onMarkAll}
             disabled={pending}
-            className="text-xs font-medium text-muted-foreground underline-offset-2 hover:underline disabled:opacity-60"
+            className="min-h-11 text-xs font-medium text-muted-foreground underline-offset-2 hover:underline disabled:opacity-60"
           >
             Mark all read
           </button>
         ) : null}
       </div>
 
-      {preview.length === 0 ? (
+      {notifications.length === 0 ? (
         <p className="mt-3 text-sm text-muted-foreground">
-          {notifications.length === 0
-            ? "No notifications yet."
-            : "No unread notifications."}
+          No notifications yet.
         </p>
       ) : (
         <ul className="mt-2 divide-y divide-border">
-          {preview.map((n) => (
+          {notifications.map((n) => (
             <NotificationRow
               key={n.id}
               n={n}
@@ -263,19 +272,6 @@ export function NotificationsList({
         </ul>
       )}
 
-      {notifications.length > 0 ? (
-        <button
-          type="button"
-          onClick={() => setModalOpen(true)}
-          className="mt-3 min-h-11 w-full rounded-lg border border-border bg-background text-sm font-medium text-foreground"
-        >
-          View all notifications
-          {notifications.length > PREVIEW_LIMIT || unreadCount < notifications.length
-            ? ` (${notifications.length})`
-            : ""}
-        </button>
-      ) : null}
-
       {notifications.some((n) => n.type === "inbox_referral") ? (
         <p className="mt-2 text-xs text-muted-foreground">
           Report alerts open the{" "}
@@ -285,16 +281,6 @@ export function NotificationsList({
           .
         </p>
       ) : null}
-
-      <NotificationsModal
-        open={modalOpen}
-        onClose={() => setModalOpen(false)}
-        notifications={notifications}
-        pending={pending}
-        onOpen={onOpen}
-        onMarkAll={onMarkAll}
-        unreadCount={unreadCount}
-      />
     </section>
   );
 }

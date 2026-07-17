@@ -1,18 +1,16 @@
 "use client";
 
 import { useEffect, useId, useRef, useState, useTransition } from "react";
-import { contactAdminAboutIdentity } from "@/app/(app)/profile/actions";
+import { contactAdminAboutIdentity } from "@/app/(app)/account/actions";
 import { DriverId } from "@/components/ui/driver-id";
 
 type Props = {
-  open: boolean;
   onClose: () => void;
   defaultEmail: string;
   driverId: string | null;
 };
 
 export function ContactAdminModal({
-  open,
   onClose,
   defaultEmail,
   driverId,
@@ -26,18 +24,11 @@ export function ContactAdminModal({
   const [sent, setSent] = useState(false);
 
   useEffect(() => {
-    if (!open) return;
-    setEmail(defaultEmail);
-    setMessage("");
-    setError(null);
-    setSent(false);
     const t = window.setTimeout(() => emailRef.current?.focus(), 0);
     return () => window.clearTimeout(t);
-  }, [open, defaultEmail]);
+  }, []);
 
   useEffect(() => {
-    if (!open) return;
-
     function onKeyDown(e: KeyboardEvent) {
       if (e.key === "Escape") onClose();
     }
@@ -49,9 +40,7 @@ export function ContactAdminModal({
       document.removeEventListener("keydown", onKeyDown);
       document.body.style.overflow = prev;
     };
-  }, [open, onClose]);
-
-  if (!open) return null;
+  }, [onClose]);
 
   function onSubmit(e: React.FormEvent) {
     e.preventDefault();

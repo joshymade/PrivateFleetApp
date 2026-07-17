@@ -36,6 +36,35 @@ export function resolveCurrentTrailerFromStops(
 }
 
 /**
+ * Current stop for Home quick view: first stop not yet departed
+ * (`completed === false`), by delivery_order. When all are departed, returns
+ * the last departed stop with `allDeparted: true`.
+ */
+export function resolveCurrentStop(
+  stops: Pick<
+    LoadStop,
+    | "id"
+    | "stop_type"
+    | "stop_name"
+    | "pickup_number"
+    | "trailer_number"
+    | "delivery_order"
+    | "completed"
+  >[],
+): {
+  stop: (typeof stops)[number] | null;
+  allDeparted: boolean;
+} {
+  const ordered = [...stops].sort((a, b) => a.delivery_order - b.delivery_order);
+  if (ordered.length === 0) return { stop: null, allDeparted: false };
+
+  const next = ordered.find((s) => !s.completed);
+  if (next) return { stop: next, allDeparted: false };
+
+  return { stop: ordered[ordered.length - 1]!, allDeparted: true };
+}
+
+/**
  * Trailer numbers for display: stop pickup trailers in delivery_order
  * (skip empty; dedupe consecutive). No separate starting-trailer field.
  *
@@ -161,6 +190,8 @@ export function statusLabel(status: Load["status"]): string {
       return "Completed";
     case "cancelled":
       return "Cancelled";
+    case "archived":
+      return "Archived";
   }
 }
 
@@ -175,5 +206,7 @@ export function statusBadgeClassName(status: Load["status"]): string {
       return "bg-muted text-foreground";
     case "cancelled":
       return "bg-red-100 text-red-800 dark:bg-red-950/40 dark:text-red-300";
+    case "archived":
+      return "bg-muted text-muted-foreground ring-1 ring-border";
   }
 }

@@ -2,17 +2,13 @@
 
 import { Search } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 
 export function FeedSearch({ initialQuery = "" }: { initialQuery?: string }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [pending, startTransition] = useTransition();
   const [value, setValue] = useState(initialQuery);
-
-  useEffect(() => {
-    setValue(initialQuery);
-  }, [initialQuery]);
 
   function applyFilter(next: string) {
     const params = new URLSearchParams(searchParams.toString());
@@ -52,7 +48,7 @@ export function FeedSearch({ initialQuery = "" }: { initialQuery?: string }) {
           onBlur={() => {
             if (value.trim() !== initialQuery.trim()) applyFilter(value);
           }}
-          placeholder="Enter trailer number to filter feed..."
+          placeholder="Search by trailer or tractor number"
           autoComplete="off"
           enterKeyHint="search"
           disabled={pending}

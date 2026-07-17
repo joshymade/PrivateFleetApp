@@ -87,7 +87,7 @@ export async function noticeReport(reportId: string): Promise<ActionResult> {
   }
 
   for (const path of feedPaths(reportId)) revalidatePath(path);
-  revalidatePath("/profile");
+  revalidatePath("/account/notifications");
   return { ok: true };
 }
 
@@ -193,7 +193,7 @@ export async function addReply(
   if (insertError) return { ok: false, error: insertError.message };
 
   for (const path of feedPaths(reportId)) revalidatePath(path);
-  revalidatePath("/profile");
+  revalidatePath("/account/notifications");
   return { ok: true };
 }
 
@@ -286,7 +286,7 @@ export async function deleteDamageReport(
   revalidatePath("/feed");
   revalidatePath(`/feed/${reportId}`);
   revalidatePath("/safety/inbox");
-  revalidatePath("/profile");
+  revalidatePath("/account/notifications");
   revalidatePath("/home");
   return { ok: true };
 }
@@ -339,7 +339,7 @@ export async function sendToSafety(
 
   for (const path of feedPaths(reportId)) revalidatePath(path);
   revalidatePath("/safety/inbox");
-  revalidatePath("/profile");
+  revalidatePath("/account/notifications");
   revalidatePath("/home");
   return { ok: true };
 }

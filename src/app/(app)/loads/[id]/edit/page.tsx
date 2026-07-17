@@ -1,4 +1,5 @@
 import { notFound, redirect } from "next/navigation";
+import { ArchiveDeleteLoad } from "@/components/loads/archive-delete-load";
 import { LoadForm } from "@/components/loads/load-form";
 import { BackLink } from "@/components/nav/back-link";
 import { pageTitleClassName } from "@/components/ui/page-title";
@@ -6,7 +7,11 @@ import {
   driverNeedsProfileSetup,
   PROFILE_SETUP_PATH,
 } from "@/lib/auth/profile";
-import { formatLoadLabel } from "@/lib/loads/format";
+import {
+  formatLoadLabel,
+  stopTypeLabel,
+  stopTypeNameClass,
+} from "@/lib/loads/format";
 import { getLoadById, getSessionProfile } from "@/lib/loads/queries";
 
 export default async function EditLoadPage({
@@ -25,8 +30,9 @@ export default async function EditLoadPage({
     redirect(PROFILE_SETUP_PATH);
   }
 
-  const canManage =
-    Boolean(userId) && (role === "driver" || role === "admin");
+  const isOwner = Boolean(userId) && load.assigned_driver_id === userId;
+  const canManage = isOwner && (role === "driver" || role === "admin");
+  const departedStops = load.load_stops.filter((s) => s.completed);
 
   return (
     <main className="mx-auto w-full max-w-lg space-y-6 p-4 pb-8">
@@ -42,15 +48,46 @@ export default async function EditLoadPage({
 
       {!canManage ? (
         <p className="text-sm text-muted-foreground">
-          Only drivers and admins can edit loads.
+          Only the assigned driver can edit this load.
         </p>
       ) : (
-        <LoadForm
-          mode="edit"
-          load={load}
-          stops={load.load_stops}
-          showAssignField={profile?.role === "admin"}
-        />
+        <>
+          <LoadForm mode="edit" load={load} stops={load.load_stops} />
+
+          {departedStops.length > 0 ? (
+            <section>
+              <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+                Depart History
+              </h2>
+              <ul className="mt-2 space-y-2 rounded-2xl border border-border bg-background p-4 text-sm">
+                {departedStops.map((stop) => (
+                  <li key={stop.id} className="space-y-0.5">
+                    <div className="flex justify-between gap-3">
+                      <span className="font-medium text-foreground">
+                        {stop.delivery_order}. {stopTypeLabel(stop.stop_type)} ·{" "}
+                        <span className={stopTypeNameClass(stop.stop_type)}>
+                          {stop.stop_name}
+                        </span>
+                      </span>
+                      <span className="shrink-0 text-muted-foreground">
+                        {stop.arrived_at
+                          ? new Date(stop.arrived_at).toLocaleString()
+                          : "—"}
+                      </span>
+                    </div>
+                    {stop.trailer_number ? (
+                      <p className="text-xs text-muted-foreground">
+                        Trailer {stop.trailer_number}
+                      </p>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
+
+          <ArchiveDeleteLoad loadId={load.id} status={load.status} />
+        </>
       )}
     </main>
   );

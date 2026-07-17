@@ -24,6 +24,16 @@ export type Profile = {
    * Only meaningful / editable when role = admin.
    */
   admin_contact_email: string | null;
+  /**
+   * Start of work week: 0=Sun … 6=Sat. Default 5 (Friday).
+   */
+  week_start_day: number;
+  /** Weekday numbers (0–6) the driver is normally off. Loads still allowed. */
+  off_days: number[];
+  /**
+   * Driver's current tractor/truck number; stamped onto new loads until changed.
+   */
+  current_truck_number: string | null;
   role: UserRole;
   created_at: string;
   updated_at: string;
@@ -37,12 +47,47 @@ export type Load = {
   /** Current/active trailer = last checked stop with trailer; null when none/completed. */
   trailer_number: string | null;
   route_number: string | null;
+  /** Snapshot of driver's current truck number at create time. */
+  truck_number: string | null;
   load_date: string;
-  assigned_miles: number | null;
+  /** Company-assigned / paid miles for the load. */
+  paid_miles: number | null;
+  /** Odometer at load start. */
+  starting_mileage: number | null;
+  /** Odometer at load complete. */
+  ending_mileage: number | null;
+  /** Dollar amount the load paid (set on/after complete). */
+  pay_amount: number | null;
   assigned_driver_id: string | null;
-  status: "active" | "pending" | "completed" | "cancelled";
+  status: "active" | "pending" | "completed" | "cancelled" | "archived";
+  /** When archived (closed out; excluded from stats). */
+  archived_at: string | null;
   created_at: string;
   updated_at: string;
+};
+
+/** Manual biweekly Average Daily Pay entry. */
+export type AdpEntry = {
+  id: string;
+  driver_id: string;
+  period_start: string;
+  period_end: string;
+  adp_amount: number;
+  created_at: string;
+};
+
+export type ContactRequestCategory =
+  | "identity"
+  | "app_issue"
+  | "feature"
+  | "other";
+
+export type ContactRequest = {
+  id: string;
+  driver_id: string;
+  category: ContactRequestCategory;
+  message: string;
+  created_at: string;
 };
 
 export type LoadStopType = "store" | "vendor" | "dc";
@@ -57,10 +102,12 @@ export type LoadStop = {
   trailer_number: string | null;
   delivery_order: number;
   /**
-   * Driver marked this stop done (UI strikethrough).
-   * Current load trailer = last checked stop with a non-empty trailer_number.
+   * Driver marked this stop Departed (UI strikethrough).
+   * Once true, must not be unchecked.
+   * Current load trailer = last departed stop with a non-empty trailer_number.
    */
   completed: boolean;
+  /** When the stop was marked Departed; set once, never cleared. */
   arrived_at: string | null;
   created_at: string;
 };

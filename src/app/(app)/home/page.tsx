@@ -1,5 +1,10 @@
 import Link from "next/link";
-import { DayOfWeekCard } from "@/components/loads/day-of-week-card";
+import type { ReactNode } from "react";
+import {
+  summarizeWorkWeekDays,
+  summarizeWorkWeekStats,
+  WorkWeekHome,
+} from "@/components/loads/work-week-home";
 import { SafetyHomeStatsGrid } from "@/components/safety/safety-home-stats";
 import {
   canAccessAdminUsers,
@@ -7,8 +12,18 @@ import {
   driverNeedsProfileSetup,
   getSessionProfile,
 } from "@/lib/auth/profile";
-import { todayDateString } from "@/lib/loads/date";
-import { getTodayLoad } from "@/lib/loads/queries";
+import {
+  formatWeekLabel,
+  todayDateString,
+  workWeekDays,
+  workWeekStart,
+} from "@/lib/loads/date";
+import {
+  getActiveLoadForDriver,
+  getLatestAdp,
+  getLoadsForWorkWeek,
+  getMonthLoadStats,
+} from "@/lib/loads/queries";
 import { createClient } from "@/lib/supabase/server";
 import type { SafetyHomeStats } from "@/types/database";
 
@@ -34,18 +49,9 @@ export default async function HomePage() {
   const today = todayDateString();
   const role = session?.role ?? profile?.role ?? "driver";
   const profileIncomplete = driverNeedsProfileSetup(role, profile);
-  const canManage =
-    (role === "driver" || role === "admin") && !profileIncomplete;
+  const canManage = role === "driver" && !profileIncomplete;
   const isSafety = role === "safety";
-
-  const load =
-    userId && profile && !isSafety
-      ? await getTodayLoad({
-          userId,
-          role: profile.role,
-          fleet: profile.role === "admin",
-        })
-      : null;
+  const isDriver = role === "driver";
 
   let pendingInbox = 0;
   let safetyStats: SafetyHomeStats | null = null;
@@ -80,23 +86,63 @@ export default async function HomePage() {
     );
   }
 
+  // Drivers only: private work-week analytics (owner-scoped loads + ADP).
+  let workWeekSection: ReactNode = null;
+  if (userId && isDriver && profile) {
+    const weekStartDay = profile.week_start_day ?? 5;
+    const offDays = profile.off_days ?? [];
+    const weekStart = workWeekStart(today, weekStartDay);
+    const days = workWeekDays(weekStart);
+    const weekEnd = days[6]!;
+
+    const [todayYear, todayMonth] = today.split("-").map(Number);
+
+    const [weekLoads, monthStats, latestAdp, activeLoad] = await Promise.all([
+      getLoadsForWorkWeek(userId, weekStart, weekEnd),
+      getMonthLoadStats(userId, todayYear!, todayMonth!),
+      getLatestAdp(userId),
+      getActiveLoadForDriver(userId),
+    ]);
+
+    const daySummaries = summarizeWorkWeekDays(
+      days,
+      weekLoads,
+      offDays,
+      today,
+      activeLoad,
+    );
+    const weekStats = summarizeWorkWeekStats(weekLoads);
+
+    workWeekSection = (
+      <WorkWeekHome
+        weekLabel={formatWeekLabel(weekStart)}
+        days={daySummaries}
+        stats={{
+          weekLoads: weekStats.loadCount,
+          weekEarnings: weekStats.earnings,
+          monthLoads: monthStats.loadCount,
+          monthEarnings: monthStats.earnings,
+        }}
+        latestAdp={latestAdp}
+        activeLoad={activeLoad}
+        currentTruckNumber={profile.current_truck_number}
+        canManage={canManage}
+      />
+    );
+  }
+
   return (
     <main className="mx-auto w-full max-w-lg space-y-5 p-4 pb-8 pt-3">
       {!userId ? (
         <div className="rounded-2xl border border-accent/50 bg-accent/15 px-4 py-3 text-sm text-foreground">
-          Sign in to see today&apos;s load.{" "}
+          Sign in to see your work week.{" "}
           <Link href="/login" className="font-medium text-brand underline">
             Sign in
           </Link>
         </div>
       ) : null}
 
-      <DayOfWeekCard
-        today={today}
-        load={load}
-        canManage={Boolean(userId && canManage)}
-        role={role}
-      />
+      {workWeekSection}
 
       {role === "admin" ? (
         <section className="rounded-2xl border border-border bg-card p-4">
@@ -104,14 +150,12 @@ export default async function HomePage() {
             Fleet oversight
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Browse all loads and assign from the Loads tab.
+            Driver load details are private to each driver. Use Feed and users
+            for fleet oversight.
           </p>
           <div className="mt-3 flex flex-col gap-2 text-sm font-medium">
-            <Link
-              href="/loads"
-              className="underline-offset-2 hover:underline"
-            >
-              Open fleet loads →
+            <Link href="/feed" className="underline-offset-2 hover:underline">
+              Open fleet Feed →
             </Link>
             {canAccessAdminUsers(role) ? (
               <Link

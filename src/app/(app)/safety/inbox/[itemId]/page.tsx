@@ -46,7 +46,7 @@ export async function generateMetadata({ params }: PageProps) {
 export default async function SafetyInboxDetailPage({ params }: PageProps) {
   const session = await getSessionProfile();
   if (!session || !canAccessSafetyInbox(session.role)) {
-    redirect("/profile");
+    redirect("/account");
   }
 
   const { itemId } = await params;

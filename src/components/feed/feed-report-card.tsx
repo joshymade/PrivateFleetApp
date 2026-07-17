@@ -1,9 +1,13 @@
 import Link from "next/link";
 import { Eye, ThumbsUp } from "lucide-react";
 import { StateIcon } from "@/components/icons";
+import { ClickableTooltip } from "@/components/ui/clickable-tooltip";
 import { LocationLink } from "@/components/ui/location-link";
 import { pageTitleColorClassName } from "@/components/ui/page-title";
-import { safetyInboxStatusLabel } from "@/lib/feed/safety-status";
+import {
+  safetyInboxStatusClassName,
+  safetyInboxStatusLabel,
+} from "@/lib/feed/safety-status";
 import { formatFeedTimestamp } from "@/lib/format-time";
 import { displayFirstOrFull } from "@/lib/profile-name";
 import { usStateName } from "@/lib/us-states";
@@ -38,6 +42,9 @@ export function FeedReportCard({ item }: { item: FeedListItem }) {
   const workState = item.reporter_work_state?.trim() || null;
   const workStateLabel = workState ? usStateName(workState) : null;
   const safetyLabel = safetyInboxStatusLabel(item.safety_inbox_status);
+  const safetyLabelClass = safetyInboxStatusClassName(
+    item.safety_inbox_status,
+  );
   const numberClass =
     item.asset_type === "tractor"
       ? "font-bold text-brand"
@@ -91,12 +98,12 @@ export function FeedReportCard({ item }: { item: FeedListItem }) {
           </p>
 
           <p className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-muted-foreground">
+            <span>{formatFeedTimestamp(item.captured_at)}</span>
+            <span aria-hidden>|</span>
             <LocationLink
               latitude={item.latitude}
               longitude={item.longitude}
             />
-            <span aria-hidden>|</span>
-            <span>{formatFeedTimestamp(item.captured_at)}</span>
             <span aria-hidden>|</span>
             <span
               className="inline-flex items-center gap-1"
@@ -124,8 +131,18 @@ export function FeedReportCard({ item }: { item: FeedListItem }) {
           </p>
 
           {safetyLabel ? (
-            <p className="text-xs font-medium text-muted-foreground">
-              {safetyLabel}
+            <p className="text-xs font-medium">
+              {item.safety_inbox_status === "pending" ? (
+                <ClickableTooltip
+                  ariaLabel="Safety Notified: learn more"
+                  className={safetyLabelClass}
+                  content="This damage report was submitted to the Safety Team by the reporting driver."
+                >
+                  {safetyLabel}
+                </ClickableTooltip>
+              ) : (
+                <span className={safetyLabelClass}>{safetyLabel}</span>
+              )}
             </p>
           ) : null}
 

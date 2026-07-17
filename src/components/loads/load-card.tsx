@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { LoadLabel } from "@/components/loads/load-label";
-import { formatShortDate } from "@/lib/loads/date";
+import { drivenMiles, formatShortDate } from "@/lib/loads/date";
 import { RouteSnippet } from "@/components/loads/route-snippet";
 import {
   formatTrailerSequence,
@@ -10,6 +10,8 @@ import {
 import type { LoadWithStops } from "@/lib/loads/queries";
 
 export function LoadCard({ load }: { load: LoadWithStops }) {
+  const driven = drivenMiles(load.starting_mileage, load.ending_mileage);
+
   return (
     <Link
       href={`/loads/${load.id}`}
@@ -38,11 +40,25 @@ export function LoadCard({ load }: { load: LoadWithStops }) {
           </dd>
         </div>
         <div>
-          <dt className="text-muted-foreground">Miles</dt>
+          <dt className="text-muted-foreground">Paid miles</dt>
           <dd className="font-medium text-foreground">
-            {load.assigned_miles != null ? load.assigned_miles : "—"}
+            {load.paid_miles != null ? load.paid_miles : "—"}
           </dd>
         </div>
+        {driven != null ? (
+          <div>
+            <dt className="text-muted-foreground">Driven</dt>
+            <dd className="font-medium text-foreground">{driven}</dd>
+          </div>
+        ) : null}
+        {load.pay_amount != null ? (
+          <div>
+            <dt className="text-muted-foreground">Pay</dt>
+            <dd className="font-medium text-foreground">
+              ${Number(load.pay_amount).toFixed(2)}
+            </dd>
+          </div>
+        ) : null}
         <div className="col-span-2">
           <dt className="text-muted-foreground">Route</dt>
           <dd className="font-medium text-foreground">

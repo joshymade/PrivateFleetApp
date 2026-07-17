@@ -12,6 +12,9 @@ import {
   SAFETY_FEED_NOTIFICATION_TYPES,
 } from "@/lib/notifications";
 import { createClient } from "@/lib/supabase/server";
+import type { AppNotification } from "@/types/database";
+
+const HEADER_NOTIFICATION_PREVIEW = 5;
 
 export default async function AppShellLayout({
   children,
@@ -61,11 +64,46 @@ export default async function AppShellLayout({
     unreadNotifications = count ?? 0;
   }
 
+  const [
+    { data: recentRows },
+    { count: headerUnreadCount },
+    { count: notificationTotal },
+  ] = await Promise.all([
+    supabase
+      .from("notifications")
+      .select(
+        "id, user_id, type, title, body, damage_report_id, safety_inbox_item_id, load_id, actor_id, read_at, created_at",
+      )
+      .eq("user_id", session.userId)
+      .order("created_at", { ascending: false })
+      .limit(HEADER_NOTIFICATION_PREVIEW),
+    supabase
+      .from("notifications")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", session.userId)
+      .is("read_at", null),
+    supabase
+      .from("notifications")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", session.userId),
+  ]);
+
+  const recentNotifications = (recentRows ?? []) as AppNotification[];
+  const unreadNotificationCount = headerUnreadCount ?? 0;
+  const hasMoreNotifications =
+    (notificationTotal ?? 0) > HEADER_NOTIFICATION_PREVIEW;
+
   return (
     <div className="flex min-h-full flex-1 flex-col">
       <div className="mx-auto w-full max-w-lg flex-1 pb-20">
         <div className="px-4 pt-4 pb-4">
-          <AppPageHeader profile={session.profile} role={session.role} />
+          <AppPageHeader
+            profile={session.profile}
+            role={session.role}
+            recentNotifications={recentNotifications}
+            unreadNotificationCount={unreadNotificationCount}
+            hasMoreNotifications={hasMoreNotifications}
+          />
         </div>
         {children}
       </div>

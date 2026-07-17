@@ -1,6 +1,19 @@
-import { createClient } from "@/lib/supabase/server";
-import type { Load, LoadStop, LoadTrailerHistory, Profile } from "@/types/database";
-import { monthBounds, todayDateString } from "./date";
+﻿import { createClient } from "@/lib/supabase/server";
+import type {
+  AdpEntry,
+  Load,
+  LoadStop,
+  LoadTrailerHistory,
+  Profile,
+} from "@/types/database";
+import {
+  drivenMiles,
+  formatWeekLabel,
+  monthBounds,
+  todayDateString,
+  workWeekDays,
+  workWeekStart,
+} from "./date";
 
 export type LoadWithStops = Load & {
   load_stops: LoadStop[];
@@ -9,6 +22,29 @@ export type LoadWithStops = Load & {
 export type LoadDetail = LoadWithStops & {
   load_trailer_history: LoadTrailerHistory[];
   assigned_driver: Pick<Profile, "id" | "full_name" | "driver_id"> | null;
+};
+
+export type MonthLoadTotals = {
+  latestAdp: number | null;
+  drivenMiles: number;
+  paidMiles: number;
+  completedLoads: number;
+  earnings: number;
+};
+
+export type WorkWeekChartDay = {
+  date: string;
+  label: string;
+  earnings: number;
+  driven: number;
+  paid: number;
+  loads: number;
+};
+
+export type WorkWeekChartSeries = {
+  weekStart: string;
+  weekLabel: string;
+  days: WorkWeekChartDay[];
 };
 
 export async function getSessionProfile(): Promise<{
@@ -25,7 +61,7 @@ export async function getSessionProfile(): Promise<{
   const { data: profile } = await supabase
     .from("profiles")
     .select(
-      "id, driver_id, email, full_name, work_state, show_work_state_on_home, identity_changes_remaining, admin_contact_email, role, created_at, updated_at",
+      "id, driver_id, email, full_name, work_state, show_work_state_on_home, identity_changes_remaining, admin_contact_email, week_start_day, off_days, current_truck_number, role, created_at, updated_at",
     )
     .eq("id", user.id)
     .maybeSingle();
@@ -40,30 +76,41 @@ function sortStops(stops: LoadStop[] | null | undefined): LoadStop[] {
 type LoadScope = {
   userId: string;
   role: Profile["role"];
-  /** Admin fleet overview (all drivers). Drivers always scoped to self. */
-  fleet?: boolean;
 };
+
+/**
+ * Owner-only load visibility. Admins do not get fleet-wide load SELECT —
+ * RLS and queries both scope to assigned_driver_id = userId.
+ */
+function applyOwnerScope<T extends { eq: (col: string, val: string) => T }>(
+  query: T,
+  scope: LoadScope,
+): T {
+  return query.eq("assigned_driver_id", scope.userId);
+}
 
 export async function getActiveLoadForDriver(
   userId: string,
-): Promise<Pick<Load, "id" | "load_number"> | null> {
+): Promise<LoadWithStops | null> {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("loads")
-    .select("id, load_number")
+    .select("*, load_stops(*)")
     .eq("assigned_driver_id", userId)
     .eq("status", "active")
+    .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();
 
   if (error || !data) return null;
-  return data;
+  const row = data as LoadWithStops;
+  return { ...row, load_stops: sortStops(row.load_stops) };
 }
 
 export async function getTodayLoad(
   scope: LoadScope,
 ): Promise<LoadWithStops | null> {
-  if (scope.role === "safety") return null;
+  if (scope.role === "safety" || scope.role === "admin") return null;
 
   const supabase = await createClient();
   const today = todayDateString();
@@ -85,25 +132,90 @@ export async function getTodayLoad(
     }
   }
 
-  let query = supabase
+  const { data, error } = await supabase
     .from("loads")
     .select("*, load_stops(*)")
+    .eq("assigned_driver_id", scope.userId)
     .eq("load_date", today)
     .neq("status", "cancelled")
+    .neq("status", "archived")
     // Prefer active, then pending, over completed (alpha: active < completed < pending).
     .order("status", { ascending: true })
     .order("created_at", { ascending: false })
     .limit(1);
 
-  if (scope.role === "driver") {
-    query = query.eq("assigned_driver_id", scope.userId);
-  }
-
-  const { data, error } = await query;
   if (error || !data?.length) return null;
 
   const row = data[0] as LoadWithStops;
   return { ...row, load_stops: sortStops(row.load_stops) };
+}
+
+/** Owner-scoped loads for a work-week date range (inclusive). */
+export async function getLoadsForWorkWeek(
+  userId: string,
+  weekStart: string,
+  weekEnd: string,
+): Promise<Load[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("loads")
+    .select(
+      "id, load_number, starting_trailer_number, trailer_number, route_number, truck_number, load_date, paid_miles, starting_mileage, ending_mileage, pay_amount, assigned_driver_id, status, archived_at, created_at, updated_at",
+    )
+    .eq("assigned_driver_id", userId)
+    .gte("load_date", weekStart)
+    .lte("load_date", weekEnd)
+    .neq("status", "cancelled")
+    .neq("status", "archived")
+    .order("load_date", { ascending: true })
+    .order("created_at", { ascending: true });
+
+  if (error || !data) return [];
+  return data as Load[];
+}
+
+/** Owner-scoped completed-load count + earnings for a calendar month. */
+export async function getMonthLoadStats(
+  userId: string,
+  year: number,
+  month: number,
+): Promise<{ loadCount: number; earnings: number }> {
+  const supabase = await createClient();
+  const { start, end } = monthBounds(year, month);
+  const { data, error } = await supabase
+    .from("loads")
+    .select("status, pay_amount")
+    .eq("assigned_driver_id", userId)
+    .gte("load_date", start)
+    .lte("load_date", end)
+    .eq("status", "completed");
+
+  if (error || !data) return { loadCount: 0, earnings: 0 };
+
+  let earnings = 0;
+  for (const row of data as Pick<Load, "status" | "pay_amount">[]) {
+    if (row.pay_amount != null) {
+      earnings += Number(row.pay_amount);
+    }
+  }
+  return { loadCount: data.length, earnings };
+}
+
+/** Most recent manual ADP entry for the driver (by period_start). */
+export async function getLatestAdp(
+  userId: string,
+): Promise<AdpEntry | null> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("adp_entries")
+    .select("*")
+    .eq("driver_id", userId)
+    .order("period_start", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error || !data) return null;
+  return data as AdpEntry;
 }
 
 /** Compact row for damage-report load linking (no stops). */
@@ -165,9 +277,7 @@ export async function getLoadsForMonth(
     .order("load_date", { ascending: false })
     .order("created_at", { ascending: false });
 
-  if (scope.role === "driver") {
-    query = query.eq("assigned_driver_id", scope.userId);
-  }
+  query = applyOwnerScope(query, scope);
 
   const { data, error } = await query;
   if (error || !data) return [];
@@ -193,9 +303,7 @@ export async function getOlderLoads(
     .order("created_at", { ascending: false })
     .limit(scope.limit ?? 40);
 
-  if (scope.role === "driver") {
-    query = query.eq("assigned_driver_id", scope.userId);
-  }
+  query = applyOwnerScope(query, scope);
 
   const { data, error } = await query;
   if (error || !data) return [];
@@ -233,8 +341,88 @@ export async function getLoadById(id: string): Promise<LoadDetail | null> {
   };
 }
 
+export function summarizeMonthLoads(
+  loads: LoadWithStops[],
+  latestAdp: number | null,
+): MonthLoadTotals {
+  let driven = 0;
+  let paid = 0;
+  let earnings = 0;
+  let completedLoads = 0;
+
+  for (const load of loads) {
+    // Stats only count completed loads (archived/active/pending/cancelled excluded).
+    if (load.status !== "completed") continue;
+
+    completedLoads += 1;
+    const d = drivenMiles(load.starting_mileage, load.ending_mileage);
+    if (d != null) driven += d;
+    if (load.paid_miles != null) paid += Number(load.paid_miles);
+    if (load.pay_amount != null) earnings += Number(load.pay_amount);
+  }
+
+  return {
+    latestAdp,
+    drivenMiles: driven,
+    paidMiles: paid,
+    completedLoads,
+    earnings,
+  };
+}
+
+/** Work-week chart series for loads in a month, keyed by driver's week_start_day. */
+export function buildWorkWeekCharts(
+  loads: LoadWithStops[],
+  weekStartDay: number,
+): WorkWeekChartSeries[] {
+  const byWeek = new Map<string, LoadWithStops[]>();
+  for (const load of loads) {
+    if (load.status !== "completed") continue;
+    const key = workWeekStart(load.load_date, weekStartDay);
+    const list = byWeek.get(key) ?? [];
+    list.push(load);
+    byWeek.set(key, list);
+  }
+
+  return [...byWeek.entries()]
+    .sort(([a], [b]) => b.localeCompare(a))
+    .map(([weekStart, weekLoads]) => {
+      const days = workWeekDays(weekStart).map((date) => {
+        const dayLoads = weekLoads.filter((l) => l.load_date === date);
+        let earnings = 0;
+        let driven = 0;
+        let paid = 0;
+        for (const load of dayLoads) {
+          if (load.pay_amount != null) earnings += Number(load.pay_amount);
+          const d = drivenMiles(load.starting_mileage, load.ending_mileage);
+          if (d != null) driven += d;
+          if (load.paid_miles != null) paid += Number(load.paid_miles);
+        }
+        const [y, m, d] = date.split("-").map(Number);
+        const label = new Date(y, m - 1, d).toLocaleDateString(undefined, {
+          weekday: "short",
+        });
+        return {
+          date,
+          label,
+          earnings,
+          driven,
+          paid,
+          loads: dayLoads.length,
+        };
+      });
+
+      return {
+        weekStart,
+        weekLabel: formatWeekLabel(weekStart),
+        days,
+      };
+    });
+}
+
 export {
   formatTrailerSequence,
+  resolveCurrentStop,
   resolveCurrentTrailerFromStops,
   routeSnippet,
   statusLabel,

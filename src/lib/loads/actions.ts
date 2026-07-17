@@ -172,12 +172,16 @@ export async function createLoad(
   const routeNumber = String(formData.get("route_number") ?? "").trim() || null;
   const loadDate =
     String(formData.get("load_date") ?? "").trim() || todayDateString();
-  const milesRaw = String(formData.get("assigned_miles") ?? "").trim();
-  const assignedMiles = milesRaw ? Number(milesRaw) : null;
-  const assignedDriverRaw = String(
-    formData.get("assigned_driver_id") ?? "",
+  const paidMilesRaw = String(formData.get("paid_miles") ?? "").trim();
+  const paidMiles = paidMilesRaw ? Number(paidMilesRaw) : null;
+  const startingMileageRaw = String(
+    formData.get("starting_mileage") ?? "",
   ).trim();
-  const assignedDriverId = assignedDriverRaw || user.id;
+  const startingMileage = startingMileageRaw
+    ? Number(startingMileageRaw)
+    : null;
+  // Always assign to self — loads are private to the owning driver.
+  const assignedDriverId = user.id;
 
   const { stops, error: stopsParseError } = parseStops(formData);
   if (stopsParseError) return { error: stopsParseError };
@@ -185,8 +189,17 @@ export async function createLoad(
   if (!loadNumber) {
     return { error: "Load number is required." };
   }
-  if (milesRaw && Number.isNaN(assignedMiles)) {
-    return { error: "Miles must be a number." };
+  if (!startingMileageRaw || Number.isNaN(startingMileage)) {
+    return { error: "Starting mileage is required." };
+  }
+  if (startingMileage != null && startingMileage < 0) {
+    return { error: "Starting mileage must be zero or greater." };
+  }
+  if (!paidMilesRaw || Number.isNaN(paidMiles)) {
+    return { error: "Paid miles is required." };
+  }
+  if (paidMiles != null && paidMiles < 0) {
+    return { error: "Paid miles must be zero or greater." };
   }
 
   const existingActive = await findActiveLoadConflict(
@@ -196,6 +209,15 @@ export async function createLoad(
   // Queue behind the active load; never create a second active.
   const status = existingActive ? "pending" : "active";
 
+  const { data: profileRow } = await supabase
+    .from("profiles")
+    .select("current_truck_number")
+    .eq("id", user.id)
+    .maybeSingle();
+  const truckNumber =
+    (profileRow as { current_truck_number: string | null } | null)
+      ?.current_truck_number?.trim() || null;
+
   const { data: load, error: insertError } = await supabase
     .from("loads")
     .insert({
@@ -203,8 +225,10 @@ export async function createLoad(
       starting_trailer_number: null,
       trailer_number: null,
       route_number: routeNumber,
+      truck_number: truckNumber,
       load_date: loadDate,
-      assigned_miles: assignedMiles,
+      paid_miles: paidMiles,
+      starting_mileage: startingMileage,
       assigned_driver_id: assignedDriverId,
       status,
     })
@@ -253,11 +277,18 @@ export async function updateLoad(
   const loadNumber = String(formData.get("load_number") ?? "").trim();
   const routeNumber = String(formData.get("route_number") ?? "").trim() || null;
   const loadDate = String(formData.get("load_date") ?? "").trim();
-  const milesRaw = String(formData.get("assigned_miles") ?? "").trim();
-  const assignedMiles = milesRaw ? Number(milesRaw) : null;
-  const assignedDriverRaw = String(
-    formData.get("assigned_driver_id") ?? "",
+  const paidMilesRaw = String(formData.get("paid_miles") ?? "").trim();
+  const paidMiles = paidMilesRaw ? Number(paidMilesRaw) : null;
+  const startingMileageRaw = String(
+    formData.get("starting_mileage") ?? "",
   ).trim();
+  const startingMileage = startingMileageRaw
+    ? Number(startingMileageRaw)
+    : null;
+  const endingMileageRaw = String(formData.get("ending_mileage") ?? "").trim();
+  const endingMileage = endingMileageRaw ? Number(endingMileageRaw) : null;
+  const payAmountRaw = String(formData.get("pay_amount") ?? "").trim();
+  const payAmount = payAmountRaw ? Number(payAmountRaw) : null;
 
   const { stops, error: stopsParseError } = parseStops(formData);
   if (stopsParseError) return { error: stopsParseError };
@@ -265,71 +296,84 @@ export async function updateLoad(
   if (!loadNumber || !loadDate) {
     return { error: "Load number and date are required." };
   }
+  if (!startingMileageRaw || Number.isNaN(startingMileage)) {
+    return { error: "Starting mileage is required." };
+  }
+  if (startingMileage != null && startingMileage < 0) {
+    return { error: "Starting mileage must be zero or greater." };
+  }
+  if (!paidMilesRaw || Number.isNaN(paidMiles)) {
+    return { error: "Paid miles is required." };
+  }
+  if (paidMiles != null && paidMiles < 0) {
+    return { error: "Paid miles must be zero or greater." };
+  }
+  if (endingMileageRaw && Number.isNaN(endingMileage)) {
+    return { error: "Ending mileage must be a number." };
+  }
+  if (
+    startingMileage != null &&
+    endingMileage != null &&
+    endingMileage < startingMileage
+  ) {
+    return { error: "Ending mileage must be greater than or equal to starting." };
+  }
+  if (payAmountRaw && (Number.isNaN(payAmount) || (payAmount != null && payAmount < 0))) {
+    return { error: "Pay amount must be a valid number." };
+  }
 
   const patch: Record<string, unknown> = {
     load_number: loadNumber,
     route_number: routeNumber,
     load_date: loadDate,
-    assigned_miles: assignedMiles,
+    paid_miles: paidMiles,
+    starting_mileage: startingMileage,
   };
-  if (assignedDriverRaw) {
-    patch.assigned_driver_id = assignedDriverRaw;
-
-    const { data: current } = await supabase
-      .from("loads")
-      .select("status")
-      .eq("id", loadId)
-      .maybeSingle();
-
-    // Reassigning an active load must not give the target a second active load.
-    if (current?.status === "active") {
-      const conflict = await findActiveLoadConflict(
-        supabase,
-        assignedDriverRaw,
-        loadId,
-      );
-      if (conflict) {
-        return {
-          error: `That driver already has an active load (Load #${conflict.load_number}). Complete it before assigning another.`,
-        };
-      }
-    }
-  }
+  if (endingMileageRaw) patch.ending_mileage = endingMileage;
+  if (payAmountRaw) patch.pay_amount = payAmount;
 
   const { error: updateError } = await supabase
     .from("loads")
     .update(patch)
-    .eq("id", loadId);
+    .eq("id", loadId)
+    .eq("assigned_driver_id", user.id);
 
   if (updateError) {
     return {
       error: isOneActiveLoadViolation(updateError.message)
-        ? "That driver already has an active load. Complete it before assigning another."
+        ? ONE_ACTIVE_LOAD_MESSAGE
         : updateError.message,
     };
   }
 
-  // Preserve completed flags by delivery_order before replacing stop rows.
+  // Preserve departed flags + timestamps by delivery_order before replacing stop rows.
   const { data: priorStops } = await supabase
     .from("load_stops")
-    .select("delivery_order, completed")
+    .select("delivery_order, completed, arrived_at")
     .eq("load_id", loadId);
-  const completedByOrder = new Map(
-    (priorStops ?? []).map((s) => [s.delivery_order, s.completed]),
+  const priorByOrder = new Map(
+    (priorStops ?? []).map((s) => [
+      s.delivery_order,
+      { completed: s.completed, arrived_at: s.arrived_at as string | null },
+    ]),
   );
 
   await supabase.from("load_stops").delete().eq("load_id", loadId);
   if (stops.length > 0) {
     const { error: stopsError } = await supabase.from("load_stops").insert(
-      stops.map((s, i) => ({
-        load_id: loadId,
-        stop_type: s.stop_type,
-        stop_name: s.stop_name,
-        pickup_number: s.pickup_number,
-        trailer_number: s.trailer_number,
-        delivery_order: i + 1,
-        completed: completedByOrder.get(i + 1) ?? false,
-      })),
+      stops.map((s, i) => {
+        const prior = priorByOrder.get(i + 1);
+        return {
+          load_id: loadId,
+          stop_type: s.stop_type,
+          stop_name: s.stop_name,
+          pickup_number: s.pickup_number,
+          trailer_number: s.trailer_number,
+          delivery_order: i + 1,
+          completed: prior?.completed ?? false,
+          arrived_at: prior?.arrived_at ?? null,
+        };
+      }),
     );
     if (stopsError) return { error: stopsError.message };
   }
@@ -348,8 +392,8 @@ export async function updateLoad(
 }
 
 /**
- * Toggle stop completed (strikethrough). Current trailer always recomputes from
- * the last checked stop with a trailer (check or uncheck).
+ * Mark stop Departed (completed=true). Once departed, uncheck is rejected.
+ * Current trailer recomputes from the last departed stop with a trailer.
  */
 export async function toggleStopCompleted(
   stopId: string,
@@ -363,7 +407,7 @@ export async function toggleStopCompleted(
 
   const { data: stop, error: stopError } = await supabase
     .from("load_stops")
-    .select("id, load_id, trailer_number, completed")
+    .select("id, load_id, trailer_number, completed, arrived_at")
     .eq("id", id)
     .maybeSingle();
 
@@ -371,9 +415,22 @@ export async function toggleStopCompleted(
     return { error: stopError?.message ?? "Stop not found." };
   }
 
+  if (stop.completed && !completed) {
+    return { error: "Departed stops cannot be unchecked." };
+  }
+
+  if (stop.completed && completed) {
+    return { success: "Already departed." };
+  }
+
+  const patch: { completed: boolean; arrived_at?: string } = { completed: true };
+  if (!stop.arrived_at) {
+    patch.arrived_at = new Date().toISOString();
+  }
+
   const { error: updateStopError } = await supabase
     .from("load_stops")
-    .update({ completed })
+    .update(patch)
     .eq("id", id);
 
   if (updateStopError) return { error: updateStopError.message };
@@ -384,24 +441,85 @@ export async function toggleStopCompleted(
   revalidatePath("/home");
   revalidatePath("/loads");
   revalidatePath(`/loads/${stop.load_id}`);
-  return { success: completed ? "Stop marked done." : "Stop unmarked." };
+  revalidatePath(`/loads/${stop.load_id}/edit`);
+  return { success: "Stop marked Departed." };
 }
 
 /**
- * Mark load complete: check all stops, clear current trailer, set status completed,
- * then auto-activate the oldest pending load for the same driver (if any).
+ * Set a stop's pickup trailer # from the checklist (no history write).
+ * Syncs loads.trailer_number from last checked stop with a trailer.
  */
-export async function completeLoad(loadId: string): Promise<LoadActionState> {
+export async function updateStopTrailerNumber(
+  stopId: string,
+  trailerNumber: string | null,
+): Promise<LoadActionState> {
+  const { supabase, error, user } = await requireWriter();
+  if (error || !user) return { error: error ?? "Sign in to manage loads." };
+
+  const id = stopId.trim();
+  if (!id) return { error: "Missing stop." };
+
+  const { data: stop, error: stopError } = await supabase
+    .from("load_stops")
+    .select("id, load_id")
+    .eq("id", id)
+    .maybeSingle();
+
+  if (stopError || !stop) {
+    return { error: stopError?.message ?? "Stop not found." };
+  }
+
+  const trimmed = trailerNumber?.trim() || null;
+
+  const { error: updateStopError } = await supabase
+    .from("load_stops")
+    .update({ trailer_number: trimmed })
+    .eq("id", id);
+
+  if (updateStopError) return { error: updateStopError.message };
+
+  // Editing stop trailer is not "became current" — no history row.
+  const sync = await syncCurrentTrailerFromStops(supabase, stop.load_id, {
+    recordHistory: false,
+  });
+  if (sync.error) return { error: sync.error };
+
+  revalidatePath("/home");
+  revalidatePath("/loads");
+  revalidatePath(`/loads/${stop.load_id}`);
+  revalidatePath(`/loads/${stop.load_id}/edit`);
+  return { success: "Trailer updated." };
+}
+
+/**
+ * Mark load complete: require ending mileage + pay amount, check all stops,
+ * clear current trailer, set status completed, then auto-activate oldest pending.
+ */
+export async function completeLoad(
+  loadId: string,
+  input?: { endingMileage?: number; payAmount?: number },
+): Promise<LoadActionState> {
   const { supabase, error, user } = await requireWriter();
   if (error || !user) return { error: error ?? "Sign in to manage loads." };
 
   const id = loadId.trim();
   if (!id) return { error: "Missing load." };
 
+  const endingMileage = Number(input?.endingMileage);
+  const payAmount = Number(input?.payAmount);
+
+  if (!Number.isFinite(endingMileage)) {
+    return { error: "Ending mileage is required." };
+  }
+  if (!Number.isFinite(payAmount) || payAmount < 0) {
+    return { error: "Pay amount is required." };
+  }
+
   const { data: load, error: loadError } = await supabase
     .from("loads")
-    .select("id, status, assigned_driver_id")
+    .select("id, status, assigned_driver_id, starting_mileage")
     .eq("id", id)
+    .eq("assigned_driver_id", user.id)
     .maybeSingle();
 
   if (loadError || !load) {
@@ -410,6 +528,21 @@ export async function completeLoad(loadId: string): Promise<LoadActionState> {
   if (load.status !== "active") {
     return { error: "Only active loads can be completed." };
   }
+  if (load.starting_mileage != null && endingMileage < Number(load.starting_mileage)) {
+    return {
+      error: "Ending mileage must be greater than or equal to starting mileage.",
+    };
+  }
+
+  const departedAt = new Date().toISOString();
+
+  const { error: stampError } = await supabase
+    .from("load_stops")
+    .update({ arrived_at: departedAt })
+    .eq("load_id", id)
+    .is("arrived_at", null);
+
+  if (stampError) return { error: stampError.message };
 
   const { error: stopsError } = await supabase
     .from("load_stops")
@@ -420,8 +553,14 @@ export async function completeLoad(loadId: string): Promise<LoadActionState> {
 
   const { error: updateError } = await supabase
     .from("loads")
-    .update({ status: "completed", trailer_number: null })
-    .eq("id", id);
+    .update({
+      status: "completed",
+      trailer_number: null,
+      ending_mileage: endingMileage,
+      pay_amount: payAmount,
+    })
+    .eq("id", id)
+    .eq("assigned_driver_id", user.id);
 
   if (updateError) return { error: updateError.message };
 
@@ -452,7 +591,6 @@ export async function completeLoad(loadId: string): Promise<LoadActionState> {
         };
       }
 
-      // Align current trailer with any already-checked stops on the new active.
       await syncCurrentTrailerFromStops(supabase, nextPending.id);
       revalidatePath(`/loads/${nextPending.id}`);
     }
@@ -462,4 +600,147 @@ export async function completeLoad(loadId: string): Promise<LoadActionState> {
   revalidatePath("/loads");
   revalidatePath(`/loads/${id}`);
   return { success: "Load completed." };
+}
+
+/**
+ * Archive an active (or pending) load: close out without counting toward stats.
+ * Clears current trailer and promotes oldest pending, same as complete.
+ */
+export async function archiveLoad(loadId: string): Promise<LoadActionState> {
+  const { supabase, error, user } = await requireWriter();
+  if (error || !user) return { error: error ?? "Sign in to manage loads." };
+
+  const id = loadId.trim();
+  if (!id) return { error: "Missing load." };
+
+  const { data: load, error: loadError } = await supabase
+    .from("loads")
+    .select("id, status, assigned_driver_id")
+    .eq("id", id)
+    .eq("assigned_driver_id", user.id)
+    .maybeSingle();
+
+  if (loadError || !load) {
+    return { error: loadError?.message ?? "Load not found." };
+  }
+  if (load.status === "archived") {
+    return { success: "Load already archived." };
+  }
+  if (load.status === "completed" || load.status === "cancelled") {
+    return { error: "Completed or cancelled loads cannot be archived." };
+  }
+
+  const wasActive = load.status === "active";
+
+  const { error: updateError } = await supabase
+    .from("loads")
+    .update({
+      status: "archived",
+      trailer_number: null,
+      archived_at: new Date().toISOString(),
+    })
+    .eq("id", id)
+    .eq("assigned_driver_id", user.id);
+
+  if (updateError) return { error: updateError.message };
+
+  if (wasActive && load.assigned_driver_id) {
+    const { data: nextPending } = await supabase
+      .from("loads")
+      .select("id")
+      .eq("assigned_driver_id", load.assigned_driver_id)
+      .eq("status", "pending")
+      .order("created_at", { ascending: true })
+      .order("id", { ascending: true })
+      .limit(1)
+      .maybeSingle();
+
+    if (nextPending) {
+      const { error: promoteError } = await supabase
+        .from("loads")
+        .update({ status: "active" })
+        .eq("id", nextPending.id)
+        .eq("status", "pending");
+
+      if (promoteError) {
+        return {
+          error: isOneActiveLoadViolation(promoteError.message)
+            ? ONE_ACTIVE_LOAD_MESSAGE
+            : promoteError.message,
+        };
+      }
+
+      await syncCurrentTrailerFromStops(supabase, nextPending.id);
+      revalidatePath(`/loads/${nextPending.id}`);
+    }
+  }
+
+  revalidatePath("/home");
+  revalidatePath("/loads");
+  revalidatePath(`/loads/${id}`);
+  revalidatePath(`/loads/${id}/edit`);
+  return { success: "Load archived." };
+}
+
+/**
+ * Hard-delete an archived load. Must archive first.
+ */
+export async function deleteLoad(loadId: string): Promise<LoadActionState> {
+  const { supabase, error, user } = await requireWriter();
+  if (error || !user) return { error: error ?? "Sign in to manage loads." };
+
+  const id = loadId.trim();
+  if (!id) return { error: "Missing load." };
+
+  const { data: load, error: loadError } = await supabase
+    .from("loads")
+    .select("id, status")
+    .eq("id", id)
+    .eq("assigned_driver_id", user.id)
+    .maybeSingle();
+
+  if (loadError || !load) {
+    return { error: loadError?.message ?? "Load not found." };
+  }
+  if (load.status !== "archived") {
+    return { error: "Archive the load before deleting." };
+  }
+
+  const { error: deleteError } = await supabase
+    .from("loads")
+    .delete()
+    .eq("id", id)
+    .eq("assigned_driver_id", user.id);
+
+  if (deleteError) return { error: deleteError.message };
+
+  revalidatePath("/home");
+  revalidatePath("/loads");
+  redirect("/loads");
+}
+
+/** Update pay amount on a completed load. */
+export async function updateLoadPayAmount(
+  loadId: string,
+  payAmount: number,
+): Promise<LoadActionState> {
+  const { supabase, error, user } = await requireWriter();
+  if (error || !user) return { error: error ?? "Sign in to manage loads." };
+
+  if (!Number.isFinite(payAmount) || payAmount < 0) {
+    return { error: "Enter a valid pay amount." };
+  }
+
+  const { error: updateError } = await supabase
+    .from("loads")
+    .update({ pay_amount: payAmount })
+    .eq("id", loadId)
+    .eq("assigned_driver_id", user.id);
+
+  if (updateError) return { error: updateError.message };
+
+  revalidatePath("/home");
+  revalidatePath("/loads");
+  revalidatePath(`/loads/${loadId}`);
+  return { success: "Pay amount updated." };
 }

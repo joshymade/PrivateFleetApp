@@ -3,10 +3,8 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import {
-  driverNeedsProfileSetup,
-  PROFILE_SETUP_PATH,
-} from "@/lib/auth/profile-complete";
+import { getPostAuthLandingPath } from "@/lib/auth/landing";
+import { driverNeedsProfileSetup } from "@/lib/auth/profile-complete";
 import { createClient } from "@/lib/supabase/client";
 import type { UserRole } from "@/types/database";
 
@@ -35,24 +33,28 @@ export function LoginForm() {
     }
 
     const userId = data.user?.id;
-    if (userId) {
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("role, full_name, work_state")
-        .eq("id", userId)
-        .maybeSingle();
-
-      const role = (profile?.role as UserRole | undefined) ?? "driver";
-      if (driverNeedsProfileSetup(role, profile)) {
-        setPending(false);
-        router.replace(PROFILE_SETUP_PATH);
-        router.refresh();
-        return;
-      }
+    if (!userId) {
+      setPending(false);
+      router.replace("/home");
+      router.refresh();
+      return;
     }
 
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("role, full_name, work_state")
+      .eq("id", userId)
+      .maybeSingle();
+
+    const role = (profile?.role as UserRole | undefined) ?? "driver";
+    const needsSetup = driverNeedsProfileSetup(role, profile);
+    const landing = await getPostAuthLandingPath(supabase, {
+      userId,
+      needsSetup,
+    });
+
     setPending(false);
-    router.replace("/home");
+    router.replace(landing.href);
     router.refresh();
   }
 

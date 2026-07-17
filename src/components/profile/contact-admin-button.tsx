@@ -28,12 +28,13 @@ export function ContactAdminButton({
       >
         Contact Admin
       </button>
-      <ContactAdminModal
-        open={open}
-        onClose={() => setOpen(false)}
-        defaultEmail={defaultEmail}
-        driverId={driverId}
-      />
+      {open ? (
+        <ContactAdminModal
+          onClose={() => setOpen(false)}
+          defaultEmail={defaultEmail}
+          driverId={driverId}
+        />
+      ) : null}
     </>
   );
 }

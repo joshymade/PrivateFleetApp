@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { getPostAuthLandingPath } from "@/lib/auth/landing";
 import {
   driverNeedsProfileSetup,
   type ProfileCompletenessFields,
@@ -26,6 +27,8 @@ function isAppPath(pathname: string): boolean {
     pathname.startsWith("/report/") ||
     pathname === "/profile" ||
     pathname.startsWith("/profile/") ||
+    pathname === "/account" ||
+    pathname.startsWith("/account/") ||
     pathname === "/export" ||
     pathname.startsWith("/export/") ||
     pathname === "/dashboard" ||
@@ -39,8 +42,13 @@ function isAppPath(pathname: string): boolean {
   );
 }
 
-function isProfilePath(pathname: string): boolean {
-  return pathname === "/profile" || pathname.startsWith("/profile/");
+function isAccountPath(pathname: string): boolean {
+  return (
+    pathname === "/account" ||
+    pathname.startsWith("/account/") ||
+    pathname === "/profile" ||
+    pathname.startsWith("/profile/")
+  );
 }
 
 function copyCookies(from: NextResponse, to: NextResponse) {
@@ -127,18 +135,37 @@ export async function updateSession(request: NextRequest) {
     const role: UserRole = profile?.role ?? "driver";
     const needsSetup = driverNeedsProfileSetup(role, profile);
 
-    if (AUTH_PATHS.has(pathname)) {
-      if (needsSetup) {
-        return redirectWithSession(request, supabaseResponse, "/profile", {
-          setup: "1",
-        });
-      }
-      return redirectWithSession(request, supabaseResponse, "/home");
+    // Legacy /profile → /account (preserve setup query).
+    if (pathname === "/profile" || pathname.startsWith("/profile/")) {
+      const rest = pathname === "/profile" ? "" : pathname.slice("/profile".length);
+      const search: Record<string, string> = {};
+      request.nextUrl.searchParams.forEach((value, key) => {
+        search[key] = value;
+      });
+      return redirectWithSession(
+        request,
+        supabaseResponse,
+        `/account${rest}`,
+        Object.keys(search).length ? search : undefined,
+      );
     }
 
-    // Incomplete drivers may only use Profile until required fields are set.
-    if (needsSetup && isAppPath(pathname) && !isProfilePath(pathname)) {
-      return redirectWithSession(request, supabaseResponse, "/profile", {
+    if (AUTH_PATHS.has(pathname)) {
+      const landing = await getPostAuthLandingPath(supabase, {
+        userId: user.id,
+        needsSetup,
+      });
+      return redirectWithSession(
+        request,
+        supabaseResponse,
+        landing.pathname,
+        landing.search,
+      );
+    }
+
+    // Incomplete drivers may only use Account until required fields are set.
+    if (needsSetup && isAppPath(pathname) && !isAccountPath(pathname)) {
+      return redirectWithSession(request, supabaseResponse, "/account", {
         setup: "1",
       });
     }

@@ -1,4 +1,5 @@
 import { StateIcon } from "@/components/icons";
+import { NotificationBell } from "@/components/nav/notification-bell";
 import { DriverId } from "@/components/ui/driver-id";
 import {
   pageTitleClassName,
@@ -6,11 +7,14 @@ import {
 } from "@/components/ui/page-title";
 import { displayFirstOrFull } from "@/lib/profile-name";
 import { usStateName } from "@/lib/us-states";
-import type { Profile, UserRole } from "@/types/database";
+import type { AppNotification, Profile, UserRole } from "@/types/database";
 
 type AppPageHeaderProps = {
   profile: Profile | null;
   role: UserRole;
+  recentNotifications?: AppNotification[];
+  unreadNotificationCount?: number;
+  hasMoreNotifications?: boolean;
 };
 
 function welcomeChipLabel(role: UserRole) {
@@ -20,7 +24,13 @@ function welcomeChipLabel(role: UserRole) {
 }
 
 /** Standard welcome header shown on every authenticated app page. */
-export function AppPageHeader({ profile, role }: AppPageHeaderProps) {
+export function AppPageHeader({
+  profile,
+  role,
+  recentNotifications = [],
+  unreadNotificationCount = 0,
+  hasMoreNotifications = false,
+}: AppPageHeaderProps) {
   const named = displayFirstOrFull(profile?.full_name, "");
   const workState = profile?.work_state?.trim() || null;
   const workStateLabel = workState
@@ -29,9 +39,16 @@ export function AppPageHeader({ profile, role }: AppPageHeaderProps) {
 
   return (
     <header className="space-y-1.5 border-b border-border pb-3 pt-1">
-      <span className="inline-flex items-center rounded-full bg-brand/10 px-2.5 py-1 text-xs font-semibold tracking-wide text-brand ring-1 ring-accent/60">
-        {welcomeChipLabel(role)}
-      </span>
+      <div className="flex items-center justify-between gap-3">
+        <span className="inline-flex items-center rounded-full bg-brand/10 px-2.5 py-1 text-xs font-semibold tracking-wide text-brand ring-1 ring-accent/60">
+          {welcomeChipLabel(role)}
+        </span>
+        <NotificationBell
+          notifications={recentNotifications}
+          unreadCount={unreadNotificationCount}
+          hasMore={hasMoreNotifications}
+        />
+      </div>
       <h1
         className={`flex flex-wrap items-center gap-x-1.5 gap-y-1 ${pageTitleClassName}`}
       >

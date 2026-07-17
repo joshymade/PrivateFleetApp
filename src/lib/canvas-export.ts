@@ -25,9 +25,9 @@ export type CanvasExportMeta = {
   trailerNumber?: string;
 };
 
-const STRIP_MIN_HEIGHT = 120;
-const STRIP_PADDING = 16;
-const LINE_HEIGHT = 22;
+const STRIP_MIN_HEIGHT = 200;
+const STRIP_PADDING = 24;
+const LINE_HEIGHT = 30;
 const MAX_WIDTH = 1600;
 
 function formatGps(lat?: number | null, lng?: number | null): string | null {
@@ -116,7 +116,7 @@ export async function compositeDamageJpg(
   const measureCanvas = document.createElement("canvas");
   const measureCtx = measureCanvas.getContext("2d");
   if (!measureCtx) throw new Error("Canvas not available");
-  measureCtx.font = "16px system-ui, sans-serif";
+  measureCtx.font = "22px system-ui, sans-serif";
   const textMax = photoW - STRIP_PADDING * 2;
   let commentLines: string[] = [];
   if (meta.reportComment?.trim()) {
@@ -131,7 +131,7 @@ export async function compositeDamageJpg(
     STRIP_MIN_HEIGHT,
     STRIP_PADDING * 2 +
       (lines.length + commentLines.length) * LINE_HEIGHT +
-      (commentLines.length > 0 ? 8 : 0),
+      (commentLines.length > 0 ? 10 : 0),
   );
 
   const canvas = document.createElement("canvas");
@@ -148,16 +148,16 @@ export async function compositeDamageJpg(
   ctx.fillRect(0, photoH, photoW, stripHeight);
 
   ctx.fillStyle = "#18181b";
-  ctx.font = "600 16px system-ui, sans-serif";
-  let y = photoH + STRIP_PADDING + 16;
+  ctx.font = "600 22px system-ui, sans-serif";
+  let y = photoH + STRIP_PADDING + 22;
   for (const line of lines) {
     ctx.fillText(line, STRIP_PADDING, y);
     y += LINE_HEIGHT;
   }
 
   if (commentLines.length > 0) {
-    y += 4;
-    ctx.font = "14px system-ui, sans-serif";
+    y += 6;
+    ctx.font = "22px system-ui, sans-serif";
     ctx.fillStyle = "#3f3f46";
     for (const line of commentLines) {
       ctx.fillText(line, STRIP_PADDING, y);

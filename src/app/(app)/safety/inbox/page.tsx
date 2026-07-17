@@ -30,7 +30,7 @@ export default async function SafetyInboxPage({
 }) {
   const session = await getSessionProfile();
   if (!session || !canAccessSafetyInbox(session.role)) {
-    redirect("/profile");
+    redirect("/account");
   }
 
   const params = await searchParams;
@@ -113,8 +113,8 @@ export default async function SafetyInboxPage({
   return (
     <main className="mx-auto w-full max-w-lg px-4 pb-8 pt-4">
       {!isSafetyViewer ? (
-        <BackLink href="/profile" aria-label="Back to Profile">
-          Profile
+        <BackLink href="/account" aria-label="Back to Account">
+          Account
         </BackLink>
       ) : null}
       <header className={isSafetyViewer ? undefined : "mt-2"}>

@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
-import { updateProfileWorkState } from "@/app/(app)/profile/actions";
+import { updateProfileWorkState } from "@/app/(app)/account/actions";
 import { US_STATES } from "@/lib/us-states";
 
 type Props = {

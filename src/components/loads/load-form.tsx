@@ -3,6 +3,8 @@
 import { useActionState, useState } from "react";
 import Link from "next/link";
 import { Plus } from "lucide-react";
+import { StopTrailerField } from "@/components/loads/stop-trailer-field";
+import { ClickableTooltip } from "@/components/ui/clickable-tooltip";
 import {
   createLoad,
   updateLoad,
@@ -13,6 +15,9 @@ import type { Load, LoadStop, LoadStopType } from "@/types/database";
 
 const initial: LoadActionState = {};
 
+const TRUCK_NUMBER_HELP =
+  "Set your current truck number in Account settings. It is applied to every new load until you change it.";
+
 const STOP_TYPE_OPTIONS: { value: LoadStopType; label: string }[] = [
   { value: "store", label: "Store" },
   { value: "vendor", label: "Vendor" },
@@ -20,6 +25,8 @@ const STOP_TYPE_OPTIONS: { value: LoadStopType; label: string }[] = [
 ];
 
 type StopDraft = {
+  /** Present for existing stops in edit mode — enables quick trailer save. */
+  id?: string;
   stop_type: LoadStopType;
   stop_name: string;
   pickup_number: string;
@@ -40,17 +47,17 @@ export function LoadForm({
   load,
   stops = [],
   defaultDate,
-  showAssignField = false,
   hasActiveLoad = false,
+  currentTruckNumber = null,
 }: {
   mode: "create" | "edit";
   load?: Load;
   stops?: LoadStop[];
   defaultDate?: string;
-  /** Admin stub: paste a profile UUID to assign. */
-  showAssignField?: boolean;
   /** When creating while an active load exists, new load will be pending. */
   hasActiveLoad?: boolean;
+  /** Profile current truck; create mode shows read-only context + Account link. */
+  currentTruckNumber?: string | null;
 }) {
   const action = mode === "create" ? createLoad : updateLoad;
   const [state, formAction, pending] = useActionState(action, initial);
@@ -60,6 +67,7 @@ export function LoadForm({
           .slice()
           .sort((a, b) => a.delivery_order - b.delivery_order)
           .map((s) => ({
+            id: s.id,
             stop_type: s.stop_type ?? "store",
             stop_name: s.stop_name,
             pickup_number: s.pickup_number ?? "",
@@ -76,6 +84,8 @@ export function LoadForm({
     });
   }
 
+  const truckDisplay = currentTruckNumber?.trim() || null;
+
   return (
     <form action={formAction} className="space-y-4">
       {mode === "edit" && load ? (
@@ -88,6 +98,32 @@ export function LoadForm({
           <span className="font-medium text-foreground">pending</span> until
           that load is completed.
         </p>
+      ) : null}
+
+      {mode === "create" ? (
+        <div className="rounded-xl border border-border bg-muted/40 px-3 py-2.5 text-sm">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            <span className="text-muted-foreground">Truck</span>
+            <span className="font-medium tabular-nums text-foreground">
+              {truckDisplay ?? "Not set"}
+            </span>
+            <span className="inline-flex items-center gap-1">
+              <Link
+                href="/account#truck-settings"
+                className="font-medium text-brand underline-offset-2 hover:underline"
+              >
+                {truckDisplay ? "Change truck number" : "Set truck number"}
+              </Link>
+              <ClickableTooltip
+                ariaLabel="Why set your truck number"
+                className="text-muted-foreground"
+                content={TRUCK_NUMBER_HELP}
+              >
+                <span className="sr-only">About truck number</span>
+              </ClickableTooltip>
+            </span>
+          </div>
+        </div>
       ) : null}
 
       <label className="block text-sm">
@@ -112,15 +148,67 @@ export function LoadForm({
           />
         </label>
         <label className="block text-sm">
-          <span className="mb-1 block font-medium text-foreground">Miles</span>
+          <span className="mb-1 block font-medium text-foreground">
+            Paid miles
+          </span>
           <input
-            name="assigned_miles"
+            name="paid_miles"
             inputMode="decimal"
-            defaultValue={load?.assigned_miles ?? ""}
+            required
+            defaultValue={load?.paid_miles ?? ""}
             className="min-h-11 w-full rounded-xl border border-border bg-background px-3 text-base text-foreground outline-none placeholder:text-muted-foreground focus:border-ring focus:ring-2 focus:ring-ring/30"
           />
         </label>
       </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        <label className="block text-sm">
+          <span className="mb-1 block font-medium text-foreground">
+            Starting mileage
+          </span>
+          <input
+            name="starting_mileage"
+            inputMode="decimal"
+            required
+            defaultValue={load?.starting_mileage ?? ""}
+            className="min-h-11 w-full rounded-xl border border-border bg-background px-3 text-base text-foreground outline-none placeholder:text-muted-foreground focus:border-ring focus:ring-2 focus:ring-ring/30"
+          />
+        </label>
+        {mode === "edit" ? (
+          <label className="block text-sm">
+            <span className="mb-1 block font-medium text-foreground">
+              Ending mileage
+            </span>
+            <input
+              name="ending_mileage"
+              inputMode="decimal"
+              defaultValue={load?.ending_mileage ?? ""}
+              className="min-h-11 w-full rounded-xl border border-border bg-background px-3 text-base text-foreground outline-none placeholder:text-muted-foreground focus:border-ring focus:ring-2 focus:ring-ring/30"
+            />
+          </label>
+        ) : (
+          <div className="block text-sm text-muted-foreground">
+            <span className="mb-1 block font-medium text-foreground">
+              Ending mileage
+            </span>
+            <p className="mt-2 text-xs">Entered when you complete the load.</p>
+          </div>
+        )}
+      </div>
+
+      {mode === "edit" ? (
+        <label className="block text-sm">
+          <span className="mb-1 block font-medium text-foreground">
+            Pay amount ($)
+          </span>
+          <input
+            name="pay_amount"
+            inputMode="decimal"
+            defaultValue={load?.pay_amount ?? ""}
+            className="min-h-11 w-full rounded-xl border border-border bg-background px-3 text-base text-foreground outline-none placeholder:text-muted-foreground focus:border-ring focus:ring-2 focus:ring-ring/30"
+          />
+        </label>
+      ) : null}
 
       <label className="block text-sm">
         <span className="mb-1 block font-medium text-foreground">Route #</span>
@@ -130,23 +218,6 @@ export function LoadForm({
           className="min-h-11 w-full rounded-xl border border-border bg-background px-3 text-base text-foreground outline-none placeholder:text-muted-foreground focus:border-ring focus:ring-2 focus:ring-ring/30"
         />
       </label>
-
-      {showAssignField ? (
-        <label className="block text-sm">
-          <span className="mb-1 block font-medium text-foreground">
-            Assign driver (profile UUID)
-          </span>
-          <input
-            name="assigned_driver_id"
-            defaultValue={load?.assigned_driver_id ?? ""}
-            placeholder="Leave blank to assign to yourself"
-            className="min-h-11 w-full rounded-xl border border-border bg-background px-3 text-base text-foreground outline-none placeholder:text-muted-foreground focus:border-ring focus:ring-2 focus:ring-ring/30"
-          />
-          <span className="mt-1 block text-xs text-muted-foreground">
-            Admin stub — paste a driver&apos;s profile id until user picker lands.
-          </span>
-        </label>
-      ) : null}
 
       <fieldset className="space-y-3">
         <legend className="text-sm font-medium text-foreground">Stops</legend>
@@ -232,27 +303,47 @@ export function LoadForm({
               />
             </label>
 
-            <label className="block text-sm">
-              <span className="mb-1 block font-medium text-foreground">
-                Trailer at this stop{" "}
-                <span className="font-normal text-muted-foreground">
-                  (optional)
+            {row.id ? (
+              <>
+                <input
+                  type="hidden"
+                  name="stop_trailer_number"
+                  value={row.trailer_number}
+                />
+                <StopTrailerField
+                  key={row.id}
+                  stopId={row.id}
+                  trailerNumber={row.trailer_number || null}
+                  canEdit
+                  variant="form"
+                  onSaved={(next) =>
+                    updateStop(index, { trailer_number: next ?? "" })
+                  }
+                />
+              </>
+            ) : (
+              <label className="block text-sm">
+                <span className="mb-1 block font-medium text-foreground">
+                  Trailer at this stop{" "}
+                  <span className="font-normal text-muted-foreground">
+                    (optional)
+                  </span>
                 </span>
-              </span>
-              <input
-                name="stop_trailer_number"
-                placeholder="Trailer picked up here"
-                value={row.trailer_number}
-                onChange={(e) =>
-                  updateStop(index, { trailer_number: e.target.value })
-                }
-                autoComplete="off"
-                className="min-h-11 w-full rounded-lg border border-border bg-background px-3 text-base text-foreground outline-none placeholder:text-muted-foreground focus:border-ring focus:ring-2 focus:ring-ring/30"
-              />
-              <span className="mt-1 block text-xs text-muted-foreground">
-                Current trailer updates when you check this stop done.
-              </span>
-            </label>
+                <input
+                  name="stop_trailer_number"
+                  placeholder="Trailer picked up here"
+                  value={row.trailer_number}
+                  onChange={(e) =>
+                    updateStop(index, { trailer_number: e.target.value })
+                  }
+                  autoComplete="off"
+                  className="min-h-11 w-full rounded-xl border border-border bg-background px-3.5 text-base text-foreground outline-none placeholder:text-muted-foreground focus:border-ring focus:ring-2 focus:ring-ring/30"
+                />
+                <span className="mt-1 block text-xs text-muted-foreground">
+                  Current trailer updates when you mark this stop Departed.
+                </span>
+              </label>
+            )}
           </div>
         ))}
         <button

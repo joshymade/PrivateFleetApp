@@ -1,4 +1,5 @@
 import { Resend } from "resend";
+import type { ContactRequestCategory } from "@/types/database";
 
 function getResendClient() {
   const apiKey = process.env.RESEND_API_KEY?.trim();
@@ -24,6 +25,27 @@ export type DriverContactAdminEmail = {
 export async function sendDriverContactAdminEmail(
   payload: DriverContactAdminEmail,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
+  return sendDriverContactRequestEmail({
+    ...payload,
+    category: "identity",
+  });
+}
+
+const CATEGORY_LABELS: Record<ContactRequestCategory, string> = {
+  identity: "Driver info change",
+  app_issue: "App issue",
+  feature: "Feature suggestion",
+  other: "Other",
+};
+
+export async function sendDriverContactRequestEmail(payload: {
+  to: string[];
+  driverEmail: string;
+  driverId: string | null;
+  driverDisplayName: string | null;
+  category: ContactRequestCategory;
+  message: string;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
   const resend = getResendClient();
   if (!resend) {
     return {
@@ -42,24 +64,27 @@ export async function sendDriverContactAdminEmail(
 
   const name = payload.driverDisplayName?.trim() || "Driver";
   const driverId = payload.driverId?.trim() || "—";
-  const subject = `PrivateFleet: identity change request from ${name}`;
+  const categoryLabel = CATEGORY_LABELS[payload.category] ?? payload.category;
+  const subject = `PrivateFleet: ${categoryLabel} from ${name}`;
   const text = [
-    "A driver requested help changing their name or work state.",
+    `A driver sent a contact request (${categoryLabel}).`,
     "",
     `Driver name: ${name}`,
     `Driver ID: ${driverId}`,
     `Driver email: ${payload.driverEmail}`,
+    `Category: ${categoryLabel}`,
     "",
     "Message:",
     payload.message.trim(),
   ].join("\n");
 
   const html = `
-    <p>A driver requested help changing their name or work state.</p>
+    <p>A driver sent a contact request (<strong>${escapeHtml(categoryLabel)}</strong>).</p>
     <ul>
       <li><strong>Driver name:</strong> ${escapeHtml(name)}</li>
       <li><strong>Driver ID:</strong> ${escapeHtml(driverId)}</li>
       <li><strong>Driver email:</strong> ${escapeHtml(payload.driverEmail)}</li>
+      <li><strong>Category:</strong> ${escapeHtml(categoryLabel)}</li>
     </ul>
     <p><strong>Message:</strong></p>
     <p>${escapeHtml(payload.message.trim()).replace(/\n/g, "<br />")}</p>

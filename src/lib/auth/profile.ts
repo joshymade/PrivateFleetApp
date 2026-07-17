@@ -28,7 +28,7 @@ export async function getSessionProfile(): Promise<SessionProfile | null> {
   const { data: profile } = await supabase
     .from("profiles")
     .select(
-      "id, driver_id, email, full_name, work_state, show_work_state_on_home, identity_changes_remaining, admin_contact_email, role, created_at, updated_at",
+      "id, driver_id, email, full_name, work_state, show_work_state_on_home, identity_changes_remaining, admin_contact_email, week_start_day, off_days, current_truck_number, role, created_at, updated_at",
     )
     .eq("id", user.id)
     .maybeSingle();

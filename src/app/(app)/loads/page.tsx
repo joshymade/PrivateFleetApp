@@ -2,44 +2,57 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { LoadCard } from "@/components/loads/load-card";
 import { LoadListRow } from "@/components/loads/load-list-row";
+import { LoadsListExpand } from "@/components/loads/loads-list-expand";
+import { LoadsMonthTotals } from "@/components/loads/loads-month-totals";
+import { LoadsWeekCharts } from "@/components/loads/loads-week-charts";
 import { MonthNavigator } from "@/components/loads/month-navigator";
 import { pageTitleClassName } from "@/components/ui/page-title";
-import { canAccessLoads, driverNeedsProfileSetup, PROFILE_SETUP_PATH } from "@/lib/auth/profile";
+import {
+  canAccessLoads,
+  driverNeedsProfileSetup,
+  PROFILE_SETUP_PATH,
+} from "@/lib/auth/profile";
 import {
   formatMonthLabel,
   formatWeekLabel,
   monthBounds,
   parseYearMonth,
-  weekKey,
-  yearMonthString,
+  workWeekStart,
 } from "@/lib/loads/date";
+import { loadsHref } from "@/lib/loads/href";
 import {
+  buildWorkWeekCharts,
+  getLatestAdp,
   getLoadsForMonth,
   getOlderLoads,
   getSessionProfile,
+  summarizeMonthLoads,
   type LoadWithStops,
 } from "@/lib/loads/queries";
 
-function groupByWeek(loads: LoadWithStops[]) {
+/** Recent preview size for the current calendar month (before expand). */
+const PREVIEW_LIMIT = 5;
+
+function groupByWorkWeek(loads: LoadWithStops[], weekStartDay: number) {
   const map = new Map<string, LoadWithStops[]>();
   for (const load of loads) {
-    const key = weekKey(load.load_date);
+    const key = workWeekStart(load.load_date, weekStartDay);
     const list = map.get(key) ?? [];
     list.push(load);
     map.set(key, list);
   }
-  return [...map.entries()];
+  return [...map.entries()].sort(([a], [b]) => b.localeCompare(a));
 }
 
 export default async function LoadsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ month?: string }>;
+  searchParams: Promise<{ month?: string; view?: string }>;
 }) {
   const params = await searchParams;
   const { year, month } = parseYearMonth(params.month);
-  const monthKey = yearMonthString(year, month);
   const { start: monthStart } = monthBounds(year, month);
+  const viewFull = params.view === "full";
 
   const now = new Date();
   const isCurrentMonth =
@@ -56,21 +69,41 @@ export default async function LoadsPage({
   }
 
   const canManage = role === "driver" || role === "admin";
-  const fleet = role === "admin";
-  const scope = profile
-    ? { userId, role: profile.role, fleet }
-    : null;
+  const weekStartDay = profile?.week_start_day ?? 5;
+  const scope = { userId, role: profile!.role };
 
-  const monthLoads = scope
-    ? await getLoadsForMonth(year, month, scope)
+  const [monthLoads, latestAdpEntry] = await Promise.all([
+    getLoadsForMonth(year, month, scope),
+    getLatestAdp(userId),
+  ]);
+
+  const olderLoads = isCurrentMonth
+    ? await getOlderLoads(monthStart, { ...scope, limit: 50 })
     : [];
 
-  const olderLoads =
-    scope && isCurrentMonth
-      ? await getOlderLoads(monthStart, { ...scope, limit: 50 })
-      : [];
+  const latestAdp =
+    latestAdpEntry != null ? Number(latestAdpEntry.adp_amount) : null;
+  // Charts + totals always use the full month payload (preview only trims the list UI).
+  const monthTotals = summarizeMonthLoads(
+    monthLoads,
+    Number.isFinite(latestAdp) ? latestAdp : null,
+  );
+  const weekCharts = buildWorkWeekCharts(monthLoads, weekStartDay);
 
-  const weekGroups = groupByWeek(monthLoads);
+  /**
+   * UX choice: current month defaults to the 5 most recent loads with a
+   * “View full month” CTA (`?view=full`). Other months (via month navigator)
+   * show the full list immediately — the user already chose that month.
+   */
+  const usePreview =
+    isCurrentMonth && !viewFull && monthLoads.length > PREVIEW_LIMIT;
+  const displayedLoads = usePreview
+    ? monthLoads.slice(0, PREVIEW_LIMIT)
+    : monthLoads;
+  const showWeekGroups = !isCurrentMonth || (viewFull && !usePreview);
+  const weekGroups = showWeekGroups
+    ? groupByWorkWeek(displayedLoads, weekStartDay)
+    : [];
 
   return (
     <main className="mx-auto w-full max-w-lg space-y-6 p-4 pb-8">
@@ -78,9 +111,7 @@ export default async function LoadsPage({
         <div>
           <h1 className={pageTitleClassName}>Loads</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            {role === "admin"
-              ? "Fleet loads by month and week."
-              : "Your load history by month."}
+            Your private load history, work-week charts, and month totals.
           </p>
         </div>
         {canManage ? (
@@ -95,27 +126,34 @@ export default async function LoadsPage({
 
       <MonthNavigator year={year} month={month} />
 
+      <LoadsMonthTotals totals={monthTotals} />
+
+      <section className="space-y-3">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+          Work-week charts
+        </h2>
+        <LoadsWeekCharts weeks={weekCharts} />
+      </section>
+
       <section className="space-y-4">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-          {isCurrentMonth ? "This month" : formatMonthLabel(year, month)}
+          {isCurrentMonth
+            ? usePreview
+              ? "Recent loads"
+              : "This month"
+            : formatMonthLabel(year, month)}
         </h2>
 
         {monthLoads.length === 0 ? (
           <p className="rounded-2xl border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
             No loads in {formatMonthLabel(year, month)}.
           </p>
-        ) : isCurrentMonth ? (
-          <div className="space-y-3">
-            {monthLoads.map((load) => (
-              <LoadCard key={load.id} load={load} />
-            ))}
-          </div>
-        ) : (
+        ) : showWeekGroups ? (
           <div className="space-y-6">
-            {weekGroups.map(([monday, loads]) => (
-              <div key={monday}>
+            {weekGroups.map(([weekStart, loads]) => (
+              <div key={weekStart}>
                 <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  {formatWeekLabel(monday)}
+                  {formatWeekLabel(weekStart)}
                 </h3>
                 <div className="space-y-3">
                   {loads.map((load) => (
@@ -125,7 +163,23 @@ export default async function LoadsPage({
               </div>
             ))}
           </div>
+        ) : (
+          <div className="space-y-3">
+            {displayedLoads.map((load) => (
+              <LoadCard key={load.id} load={load} />
+            ))}
+          </div>
         )}
+
+        {isCurrentMonth ? (
+          <LoadsListExpand
+            year={year}
+            month={month}
+            previewLimit={PREVIEW_LIMIT}
+            totalCount={monthLoads.length}
+            expanded={viewFull}
+          />
+        ) : null}
       </section>
 
       {isCurrentMonth && olderLoads.length > 0 ? (
@@ -140,7 +194,7 @@ export default async function LoadsPage({
           </div>
           <p className="mt-3 text-center text-xs text-muted-foreground">
             Browse other months with the arrows above, or open{" "}
-            <Link href={`/loads?month=${monthKey}`} className="underline">
+            <Link href={loadsHref({ year, month })} className="underline">
               this month
             </Link>
             .

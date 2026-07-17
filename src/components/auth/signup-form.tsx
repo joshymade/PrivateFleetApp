@@ -79,7 +79,7 @@ export function SignupForm() {
     }
 
     // New drivers still need work_state (and may have skipped name).
-    router.replace("/profile?setup=1");
+    router.replace("/account?setup=1");
     router.refresh();
   }
 
