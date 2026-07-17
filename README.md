@@ -40,3 +40,9 @@ npm run dev
 Open [http://localhost:3000](http://localhost:3000).
 
 Env variable names only are listed in `.env.local.example` and the docs above — do not put secrets in this README.
+
+## License
+
+Proprietary. Copyright (c) 2026 Joshua Banks. All rights reserved.
+
+No permission is granted to use, copy, modify, or distribute this software without prior written permission. See [LICENSE](LICENSE).
