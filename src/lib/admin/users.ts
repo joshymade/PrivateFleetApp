@@ -13,6 +13,8 @@ export type AdminUserListItem = {
   email: string | null;
   full_name: string | null;
   role: UserRole;
+  region: number | null;
+  region_locked: boolean;
   disabled_at: string | null;
   created_at: string;
   report_count: number;
@@ -37,6 +39,8 @@ type ProfileRow = Pick<
   | "email"
   | "full_name"
   | "role"
+  | "region"
+  | "region_locked"
   | "disabled_at"
   | "created_at"
   | "updated_at"
@@ -75,48 +79,38 @@ function toListItem(
   loadCount: number,
   lastSignIn: string | null | undefined,
 ): AdminUserListItem {
-  if (lastSignIn) {
-    return {
-      id: profile.id,
-      driver_id: profile.driver_id,
-      email: profile.email,
-      full_name: profile.full_name,
-      role: profile.role,
-      disabled_at: profile.disabled_at,
-      created_at: profile.created_at,
-      report_count: reportCount,
-      load_count: loadCount,
-      last_active_at: lastSignIn,
-      last_active_source: "last_sign_in",
-    };
-  }
-  if (profile.updated_at) {
-    return {
-      id: profile.id,
-      driver_id: profile.driver_id,
-      email: profile.email,
-      full_name: profile.full_name,
-      role: profile.role,
-      disabled_at: profile.disabled_at,
-      created_at: profile.created_at,
-      report_count: reportCount,
-      load_count: loadCount,
-      last_active_at: profile.updated_at,
-      last_active_source: "updated_at",
-    };
-  }
-  return {
+  const base = {
     id: profile.id,
     driver_id: profile.driver_id,
     email: profile.email,
     full_name: profile.full_name,
     role: profile.role,
+    region: profile.region ?? null,
+    region_locked: Boolean(profile.region_locked),
     disabled_at: profile.disabled_at,
     created_at: profile.created_at,
     report_count: reportCount,
     load_count: loadCount,
+  };
+
+  if (lastSignIn) {
+    return {
+      ...base,
+      last_active_at: lastSignIn,
+      last_active_source: "last_sign_in" as const,
+    };
+  }
+  if (profile.updated_at) {
+    return {
+      ...base,
+      last_active_at: profile.updated_at,
+      last_active_source: "updated_at" as const,
+    };
+  }
+  return {
+    ...base,
     last_active_at: null,
-    last_active_source: "none",
+    last_active_source: "none" as const,
   };
 }
 
@@ -128,7 +122,7 @@ export async function listAdminUsers(): Promise<{
   const { data, error } = await supabase
     .from("profiles")
     .select(
-      "id, driver_id, email, full_name, role, disabled_at, created_at, updated_at, is_system_anonymous",
+      "id, driver_id, email, full_name, role, region, region_locked, disabled_at, created_at, updated_at, is_system_anonymous",
     )
     .eq("is_system_anonymous", false)
     .order("created_at", { ascending: true });
@@ -180,7 +174,7 @@ export async function getAdminUserDetail(
   const { data: profile, error } = await supabase
     .from("profiles")
     .select(
-      "id, driver_id, email, full_name, role, disabled_at, created_at, updated_at, is_system_anonymous",
+      "id, driver_id, email, full_name, role, region, region_locked, disabled_at, created_at, updated_at, is_system_anonymous",
     )
     .eq("id", userId)
     .maybeSingle();

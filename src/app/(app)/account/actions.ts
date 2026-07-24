@@ -301,6 +301,60 @@ export async function updateCurrentTruckNumber(input: {
   return { ok: true };
 }
 
+export async function updateProfileRegion(
+  region: number | null,
+): Promise<ActionResult> {
+  const { supabase, user, error } = await requireUser();
+  if (!user) return { ok: false, error: error ?? "Sign in required." };
+
+  if (region !== null) {
+    if (!Number.isInteger(region) || region < 1 || region > 6) {
+      return { ok: false, error: "Choose a region from 1 to 6." };
+    }
+  } else {
+    return { ok: false, error: "Choose a region from 1 to 6." };
+  }
+
+  const { data: before } = await supabase
+    .from("profiles")
+    .select("role, region, region_locked")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  if (before?.role !== "driver") {
+    return { ok: false, error: "Only drivers can set their own region." };
+  }
+
+  if (before.region_locked) {
+    return {
+      ok: false,
+      error: "Region is locked. Contact Admin to request a change.",
+    };
+  }
+
+  if ((before.region ?? null) === region) {
+    return { ok: true };
+  }
+
+  const { error: updateError } = await supabase
+    .from("profiles")
+    .update({ region })
+    .eq("id", user.id);
+
+  if (updateError) {
+    if (/region is locked|contact admin/i.test(updateError.message)) {
+      return {
+        ok: false,
+        error: "Region is locked. Contact Admin to request a change.",
+      };
+    }
+    return { ok: false, error: updateError.message };
+  }
+
+  revalidateAccountSurfaces();
+  return { ok: true };
+}
+
 export async function createAdpEntry(input: {
   periodStart: string;
   periodEnd: string;

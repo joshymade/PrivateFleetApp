@@ -3,6 +3,7 @@ import { AccountNavCard } from "@/components/account/account-nav-card";
 import { AccountDataResetButtons } from "@/components/account/account-data-reset-buttons";
 import { AdpHistorySection } from "@/components/account/adp-history-section";
 import { DriverWeekSettings } from "@/components/account/driver-week-settings";
+import { ProfileRegionForm } from "@/components/account/profile-region-form";
 import { SignOutButton } from "@/components/auth/sign-out-button";
 import { AdminContactEmailForm } from "@/components/profile/admin-contact-email-form";
 import { ContactAdminButton } from "@/components/profile/contact-admin-button";
@@ -166,17 +167,35 @@ export default async function AccountPage() {
               </span>
             </dd>
           </div>
+          {role === "safety" ? (
+            <div>
+              <dt className="text-muted-foreground">Region</dt>
+              <dd className="font-medium text-foreground">
+                {profile?.region != null
+                  ? `Region ${profile.region}`
+                  : "Not assigned — contact Admin"}
+              </dd>
+            </div>
+          ) : null}
         </dl>
       </section>
 
       {role === "driver" && !setupMode ? (
         <section className="flex flex-col gap-4 rounded-2xl border border-border bg-card p-4">
           <h2 className="text-sm font-semibold text-foreground">Settings</h2>
-          <DriverWeekSettings
-            weekStartDay={weekStartDay}
-            offDays={offDays}
-            currentTruckNumber={profile?.current_truck_number ?? null}
+          <ProfileRegionForm
+            initialRegion={profile?.region ?? null}
+            regionLocked={Boolean(profile?.region_locked)}
+            defaultEmail={email ?? ""}
+            driverId={profile?.driver_id ?? null}
           />
+          <div className="border-t border-border pt-4">
+            <DriverWeekSettings
+              weekStartDay={weekStartDay}
+              offDays={offDays}
+              currentTruckNumber={profile?.current_truck_number ?? null}
+            />
+          </div>
           <AccountDataResetButtons />
           <div className="border-t border-border pt-4">
             <AdpHistorySection entries={adpEntries} />

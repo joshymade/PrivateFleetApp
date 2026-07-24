@@ -21,7 +21,7 @@
 
 | Track | Status | Notes |
 | --- | --- | --- |
-| Supabase Cloud (`mvrbfyoujggqazsicgal`) | **OK** | `ACTIVE_HEALTHY`; migrations through `033_anonymous_driver_deletion_requests` applied |
+| Supabase Cloud (`mvrbfyoujggqazsicgal`) | **OK** | `ACTIVE_HEALTHY`; migrations through `035_profile_region_safety_scope` applied |
 | App env | **OK** | `.env.local` → `https://mvrbfyoujggqazsicgal.supabase.co`; publishable key matches dashboard |
 | Migrations `001`–`009` (core MVP) | **Applied** | Init, comments, notice RLS, notifications, signup/role locks, notice view, photos, work_state |
 | Migrations `010`–`027` (loads / feed / safety / profile) | **Applied** | Load stops/trailers, one-active/pending, view counts, nested replies, safety scope, admin delete, inbox RLS fix, identity edits, reply notify, safety home stats, notification copy, comment beeps, trailer history on current only |
@@ -352,6 +352,16 @@ Admin creates users with temp password; force change on login; role set to drive
 2. [x] `createUser` service-role action; Create user form on `/admin/users`; role driver|safety on create.
 3. [x] Middleware + login gate → `/account/change-password`; clear flag after `updateUser` password change.
 4. [x] User detail: Driver/Safety select + Save role (no admin promotion from UI).
+5. [x] Verify tsc + eslint on touched files.
+
+### Feature 17: Driver/Safety region assignment — suggested 2026-07-23
+
+Drivers set region (1–6) once in Account settings (then locked). Admin assigns/changes region for drivers and Safety. Safety sees only their region's damage reports (snapshot `reporter_region` on insert) plus region + fleet-wide stats on Home.
+
+1. [x] Migration `035_profile_region_safety_scope`: `profiles.region` + `region_locked`; `damage_reports.reporter_region` snapshot + backfill; region lock trigger; Safety RLS on damage/photos/inbox by region; `safety_home_stats` region+fleet; apply on Cloud; update `database.ts`.
+2. [x] Account Settings: driver region select (disabled when locked + Contact Admin); Safety shows assigned region read-only.
+3. [x] Admin user detail: edit region for driver/safety; create-user optional region for safety/driver.
+4. [x] Safety Home: labeled region stats + fleet-wide combined stats; Safety Feed/inbox scoped by RLS to region.
 5. [x] Verify tsc + eslint on touched files.
 
 ---

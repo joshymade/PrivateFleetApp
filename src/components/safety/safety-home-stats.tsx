@@ -3,6 +3,15 @@ import { pageTitleClassName } from "@/components/ui/page-title";
 import type { SafetyHomeStats } from "@/types/database";
 
 const emptyStats: SafetyHomeStats = {
+  region: null,
+  region_total: 0,
+  region_pending: 0,
+  region_reports_24h: 0,
+  region_reports_30d: 0,
+  fleet_total: 0,
+  fleet_pending: 0,
+  fleet_reports_24h: 0,
+  fleet_reports_30d: 0,
   total_reports: 0,
   pending_review: 0,
   reports_24h: 0,
@@ -88,30 +97,80 @@ export function SafetyHomeStatsGrid({
   stats: SafetyHomeStats | null;
 }) {
   const s = stats ?? emptyStats;
+  const regionLabel =
+    s.region != null ? `Region ${s.region}` : "Your region (unassigned)";
 
   return (
-    <section className="space-y-3">
+    <section className="space-y-5">
       <div>
         <h1 className={pageTitleClassName}>Safety overview</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Fleet damage report activity and inbox status.
+          Region damage activity and fleet-wide totals.
         </p>
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
-        <StatCard
-          value={s.total_reports}
-          label="Total reports created"
-          tone="total"
-        />
-        <StatCard
-          value={s.pending_review}
-          label="Pending review"
-          href="/safety/inbox"
-          tone="pending"
-        />
-        <StatCard value={s.reports_24h} label="Past 24 hours" tone="recent" />
-        <StatCard value={s.reports_30d} label="Last 30 days" tone="month" />
+      <div className="space-y-2">
+        <h2 className="text-sm font-semibold text-foreground">{regionLabel}</h2>
+        {s.region == null ? (
+          <p className="text-xs text-muted-foreground">
+            Ask Admin to assign your region so these counts and the Safety Feed
+            fill in.
+          </p>
+        ) : null}
+        <div className="grid grid-cols-2 gap-3">
+          <StatCard
+            value={s.region_total}
+            label="Reports in region"
+            tone="total"
+          />
+          <StatCard
+            value={s.region_pending}
+            label="Pending in region"
+            href="/safety/inbox"
+            tone="pending"
+          />
+          <StatCard
+            value={s.region_reports_24h}
+            label="Region · past 24 hours"
+            tone="recent"
+          />
+          <StatCard
+            value={s.region_reports_30d}
+            label="Region · last 30 days"
+            tone="month"
+          />
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        <h2 className="text-sm font-semibold text-foreground">
+          All regions (fleet)
+        </h2>
+        <p className="text-xs text-muted-foreground">
+          Combined totals across every region for context.
+        </p>
+        <div className="grid grid-cols-2 gap-3">
+          <StatCard
+            value={s.fleet_total}
+            label="Fleet reports created"
+            tone="total"
+          />
+          <StatCard
+            value={s.fleet_pending}
+            label="Fleet pending review"
+            tone="pending"
+          />
+          <StatCard
+            value={s.fleet_reports_24h}
+            label="Fleet · past 24 hours"
+            tone="recent"
+          />
+          <StatCard
+            value={s.fleet_reports_30d}
+            label="Fleet · last 30 days"
+            tone="month"
+          />
+        </div>
       </div>
     </section>
   );

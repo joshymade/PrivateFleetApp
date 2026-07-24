@@ -34,6 +34,15 @@ export type Profile = {
    * Driver's current tractor/truck number; stamped onto new loads until changed.
    */
   current_truck_number: string | null;
+  /**
+   * Fleet region 1–6. Drivers set once then lock; Safety assigned by Admin.
+   * Admin may leave null.
+   */
+  region: number | null;
+  /**
+   * When true, non-admins cannot change region (set after driver's first choice).
+   */
+  region_locked: boolean;
   role: UserRole;
   /**
    * When set, the account is locked out (middleware + login reject).
@@ -163,6 +172,10 @@ export type DamageReport = {
    * Reporting driver at create time. Preserved after untag for deletion-request auth.
    */
   original_reported_by: string | null;
+  /**
+   * Snapshot of the reporting driver's profiles.region at insert (Safety scope).
+   */
+  reporter_region: number | null;
   load_id: string | null;
   route_number: string | null;
   latitude: number | null;
@@ -275,8 +288,19 @@ export type DamageReportWithNoticeCount = DamageReport & {
   notice_count: number;
 };
 
-/** Result of `safety_home_stats()` RPC (fleet aggregates for safety/admin). */
+/** Result of `safety_home_stats()` RPC (region + fleet aggregates). */
 export type SafetyHomeStats = {
+  /** Caller's assigned region; null if unset. */
+  region: number | null;
+  region_total: number;
+  region_pending: number;
+  region_reports_24h: number;
+  region_reports_30d: number;
+  fleet_total: number;
+  fleet_pending: number;
+  fleet_reports_24h: number;
+  fleet_reports_30d: number;
+  /** Legacy aliases (region for safety; fleet for admin). */
   total_reports: number;
   pending_review: number;
   reports_24h: number;

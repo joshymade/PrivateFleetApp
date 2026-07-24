@@ -8,10 +8,12 @@ import {
   resetUserLoads,
   resetUserReports,
   setUserDisabled,
+  updateUserRegion,
   updateUserRole,
 } from "@/app/(app)/admin/users/actions";
 import { DriverId } from "@/components/ui/driver-id";
 import type { AdminUserDetail } from "@/lib/admin/users";
+import { FLEET_REGIONS } from "@/lib/fleet-region";
 import type { ContactRequestCategory, UserRole } from "@/types/database";
 
 const ASSIGNABLE_ROLES: Array<"driver" | "safety"> = ["driver", "safety"];
@@ -91,19 +93,28 @@ export function AdminUserDetailPanel({
   const [roleDraft, setRoleDraft] = useState<"driver" | "safety" | "">(
     initialRoleDraft(user.role),
   );
+  const [regionDraft, setRegionDraft] = useState(
+    user.region != null ? String(user.region) : "",
+  );
   const [confirm, setConfirm] = useState<
     null | "disable" | "enable" | "reset_reports" | "reset_loads" | "delete"
   >(null);
 
   useEffect(() => {
     setRoleDraft(initialRoleDraft(user.role));
-  }, [user.id, user.role]);
+    setRegionDraft(user.region != null ? String(user.region) : "");
+  }, [user.id, user.role, user.region]);
 
   const isSelf = user.id === currentUserId;
   const latestRequest = user.contact_requests[user.contact_requests.length - 1];
   const thread = buildThread(user);
   const canSaveRole =
     Boolean(roleDraft) && roleDraft !== user.role && !pending;
+  const regionTarget =
+    user.role === "driver" || user.role === "safety" ? user.role : null;
+  const currentRegionStr = user.region != null ? String(user.region) : "";
+  const canSaveRegion =
+    Boolean(regionTarget) && regionDraft !== currentRegionStr && !pending;
 
   function run(
     action: () => Promise<{ ok: boolean; error?: string; message?: string }>,
@@ -229,6 +240,44 @@ export function AdminUserDetailPanel({
             {pending ? "Saving…" : "Save role"}
           </button>
         </div>
+
+        {regionTarget ? (
+          <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-end">
+            <label className="flex flex-1 flex-col gap-1 text-sm">
+              <span className="text-muted-foreground">
+                Region
+                {user.region_locked && user.role === "driver" ? (
+                  <span className="ml-1 text-[11px]">(locked for driver)</span>
+                ) : null}
+              </span>
+              <select
+                className="w-full rounded-md border border-border bg-background px-2 py-2 text-sm text-foreground focus:border-ring focus:ring-2 focus:ring-ring/30"
+                value={regionDraft}
+                disabled={pending}
+                aria-label="Change region"
+                onChange={(e) => setRegionDraft(e.target.value)}
+              >
+                <option value="">No region</option>
+                {FLEET_REGIONS.map((r) => (
+                  <option key={r} value={r}>
+                    Region {r}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button
+              type="button"
+              disabled={!canSaveRegion}
+              onClick={() => {
+                const next = regionDraft ? Number(regionDraft) : null;
+                run(() => updateUserRegion(user.id, next), false);
+              }}
+              className="min-h-11 shrink-0 rounded-xl border border-border bg-card px-4 text-sm font-semibold text-foreground disabled:opacity-50"
+            >
+              {pending ? "Saving…" : "Save region"}
+            </button>
+          </div>
+        ) : null}
       </section>
 
       <section className="space-y-3">

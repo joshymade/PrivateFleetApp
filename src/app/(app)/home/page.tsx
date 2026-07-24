@@ -34,7 +34,24 @@ function parseSafetyHomeStats(data: unknown): SafetyHomeStats | null {
     const v = row[key];
     return typeof v === "number" && Number.isFinite(v) ? v : 0;
   };
+  const regionRaw = row.region;
+  const region =
+    typeof regionRaw === "number" &&
+    Number.isInteger(regionRaw) &&
+    regionRaw >= 1 &&
+    regionRaw <= 6
+      ? regionRaw
+      : null;
   return {
+    region,
+    region_total: n("region_total"),
+    region_pending: n("region_pending"),
+    region_reports_24h: n("region_reports_24h"),
+    region_reports_30d: n("region_reports_30d"),
+    fleet_total: n("fleet_total"),
+    fleet_pending: n("fleet_pending"),
+    fleet_reports_24h: n("fleet_reports_24h"),
+    fleet_reports_30d: n("fleet_reports_30d"),
     total_reports: n("total_reports"),
     pending_review: n("pending_review"),
     reports_24h: n("reports_24h"),

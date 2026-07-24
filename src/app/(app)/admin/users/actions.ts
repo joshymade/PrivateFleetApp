@@ -242,6 +242,53 @@ export async function updateUserRole(
   return { ok: true, message: `Role set to ${role}.` };
 }
 
+export async function updateUserRegion(
+  userId: string,
+  region: number | null,
+): Promise<AdminActionResult> {
+  const { session, error } = await requireAdmin();
+  if (!session) return { ok: false, error: error ?? "Admin access required." };
+
+  if (region !== null) {
+    if (!Number.isInteger(region) || region < 1 || region > 6) {
+      return { ok: false, error: "Region must be 1–6 or empty." };
+    }
+  }
+
+  const supabase = await createClient();
+  const { data: target } = await supabase
+    .from("profiles")
+    .select("id, role")
+    .eq("id", userId)
+    .maybeSingle();
+
+  if (!target) return { ok: false, error: "User not found." };
+  if (target.role !== "driver" && target.role !== "safety") {
+    return {
+      ok: false,
+      error: "Region applies to driver and safety accounts only.",
+    };
+  }
+
+  const { data, error: updateError } = await supabase
+    .from("profiles")
+    .update({ region })
+    .eq("id", userId)
+    .select("id")
+    .maybeSingle();
+
+  if (updateError) return { ok: false, error: updateError.message };
+  if (!data) return { ok: false, error: "Region was not updated." };
+
+  revalidatePath("/admin/users");
+  revalidatePath(`/admin/users/${userId}`);
+  return {
+    ok: true,
+    message:
+      region == null ? "Region cleared." : `Region set to ${region}.`,
+  };
+}
+
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 /** Matches signup/login HTML minLength and Supabase default minimum. */
 const MIN_PASSWORD_LENGTH = 6;
@@ -250,6 +297,8 @@ export type CreateUserInput = {
   email: string;
   temporaryPassword: string;
   role: "driver" | "safety";
+  /** Optional region for safety (or driver) at create time. */
+  region?: number | null;
 };
 
 /**
@@ -265,6 +314,10 @@ export async function createUser(
   const email = input.email.trim().toLowerCase();
   const temporaryPassword = input.temporaryPassword;
   const role = input.role;
+  const region =
+    input.region === null || input.region === undefined
+      ? null
+      : Number(input.region);
 
   if (!EMAIL_RE.test(email)) {
     return { ok: false, error: "Enter a valid email address." };
@@ -277,6 +330,12 @@ export async function createUser(
   }
   if (role !== "driver" && role !== "safety") {
     return { ok: false, error: "Role must be driver or safety." };
+  }
+  if (
+    region !== null &&
+    (!Number.isInteger(region) || region < 1 || region > 6)
+  ) {
+    return { ok: false, error: "Region must be 1–6 when set." };
   }
 
   const { admin, error: adminError } = adminClientOrError();
@@ -332,12 +391,16 @@ export async function createUser(
     must_change_password: boolean;
     role: "driver" | "safety";
     driver_id?: null;
+    region?: number | null;
   } = {
     must_change_password: true,
     role,
   };
   if (role === "safety") {
     profilePatch.driver_id = null;
+    profilePatch.region = region;
+  } else if (region !== null) {
+    profilePatch.region = region;
   }
 
   const { error: profileError } = await admin

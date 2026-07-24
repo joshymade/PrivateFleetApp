@@ -122,7 +122,9 @@ export default async function SafetyInboxPage({
           {isSafetyViewer ? "Safety Feed" : "Safety inbox"}
         </h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Reports sent to Safety
+          {isSafetyViewer
+            ? "Referrals from your region"
+            : "Reports sent to Safety"}
           {typeof pendingCount === "number" ? ` · ${pendingCount} pending` : ""}
           .
         </p>
