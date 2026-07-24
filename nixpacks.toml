@@ -1,8 +1,11 @@
 # Easypanel / Nixpacks: Next.js needs build tooling (Tailwind, TypeScript,
 # esbuild/Serwist, React Compiler) that lives in package.json. With
 # NODE_ENV=production, npm skips those unless production installs are disabled.
+# NIXPACKS_PATH avoids Dockerfile UndefinedVar warnings when the generated
+# image references $NIXPACKS_PATH in PATH.
 [variables]
 NPM_CONFIG_PRODUCTION = "false"
+NIXPACKS_PATH = "/app/node_modules/.bin"
 
 [phases.install]
 cmds = ["npm ci"]

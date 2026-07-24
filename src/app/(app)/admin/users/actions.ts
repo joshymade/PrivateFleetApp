@@ -7,20 +7,12 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import {
   ANONYMOUS_DRIVER_PROFILE_ID,
-  type ContactRequestCategory,
   type UserRole,
 } from "@/types/database";
 
 export type AdminActionResult =
   | { ok: true; message?: string }
   | { ok: false; error: string };
-
-const CATEGORY_LABELS: Record<ContactRequestCategory, string> = {
-  identity: "Driver info",
-  app_issue: "App issue",
-  feature: "Feature",
-  other: "Other",
-};
 
 async function requireAdmin() {
   const session = await getSessionProfile();
@@ -421,10 +413,4 @@ export async function createUser(
     message: `Created ${role} account for ${email}. They must change password on login.`,
     userId,
   };
-}
-
-export function contactCategoryLabel(
-  category: ContactRequestCategory,
-): string {
-  return CATEGORY_LABELS[category] ?? category;
 }
