@@ -290,6 +290,30 @@ Move notifications off the Feed page into a shared header bell on every `(app)` 
 5. [x] Home Active Load Tractor from load snapshot (fallback profile); load detail shows Truck #.
 6. [x] Verify tsc + eslint on touched files.
 
+### Feature 10: Optional mileage on past loads — suggested 2026-07-23
+
+Allow drivers logging old loads to leave starting/ending odometer blank when they did not record mileage. Same-day loads still require starting mileage; ending mileage stays required when starting was set or the load date is today. Paid miles and pay amount rules unchanged. Driven miles stay null when either odometer is missing; stats still count earnings and skip null driven totals.
+
+1. [x] Create/update load actions: require `starting_mileage` only when `load_date === today`; keep paid miles required.
+2. [x] Complete load: require ending mileage only if starting was set OR load_date is today; allow complete without odometer for old blank loads.
+3. [x] Load form UI: toggle starting mileage `required` from date field; helper text “Optional for past loads”.
+4. [x] Complete-load UI: optional ending when past load had no starting mileage.
+5. [x] Verify tsc + eslint on touched files.
+
+### Feature 11: Home Active Load — Complete on last stop — suggested 2026-07-23
+
+1. [x] When only one undeparted stop remains (or all departed), show Complete Load instead of Depart on Home Active Load card.
+2. [x] Reuse CompleteLoadButton with `variant="home"`; refresh Home after complete.
+
+### Feature 12: Feed unit search + unit history — suggested 2026-07-23
+
+Digit-normalized trailer/tractor search opens a dedicated unit history page (Feed › unit number) listing all damage reports for that asset. Unit numbers on feed cards and report detail link to the same page. Tractor display format (`##-####`) is preserved; matching compares digits only.
+
+1. [x] `FeedSearch`: normalize query to digits; navigate to `/feed/unit/[digits]` on submit.
+2. [x] Unit page `feed/unit/[assetNumber]`: BackLink to Feed, reuse feed cards + pagination; match stored `asset_number` via digit-equivalent values.
+3. [x] Clickable unit number on `FeedReportCard` and report detail → unit page.
+4. [x] Legacy `/feed?q=` with digits redirects to the unit page.
+
 ---
 
 ## Quick reference — env (no secrets here)

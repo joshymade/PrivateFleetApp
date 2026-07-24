@@ -4,6 +4,7 @@ import { StateIcon } from "@/components/icons";
 import { ClickableTooltip } from "@/components/ui/clickable-tooltip";
 import { LocationLink } from "@/components/ui/location-link";
 import { pageTitleColorClassName } from "@/components/ui/page-title";
+import { feedUnitHref } from "@/lib/feed/asset-number";
 import {
   safetyInboxStatusClassName,
   safetyInboxStatusLabel,
@@ -72,12 +73,18 @@ export function FeedReportCard({ item }: { item: FeedListItem }) {
         </Link>
 
         <div className="min-w-0 flex-1 space-y-1.5">
-          <Link href={`/feed/${item.id}`} className="block">
-            <p className="text-sm font-semibold tracking-tight text-foreground">
-              {assetLabel(item.asset_type)}{" "}
-              <span className={numberClass}>{item.asset_number}</span>
-            </p>
-          </Link>
+          <p className="text-sm font-semibold tracking-tight text-foreground">
+            <Link href={`/feed/${item.id}`} className="hover:underline">
+              {assetLabel(item.asset_type)}
+            </Link>{" "}
+            <Link
+              href={feedUnitHref(item.asset_number)}
+              className={`${numberClass} hover:underline`}
+              title={`All damage reports for ${item.asset_number}`}
+            >
+              {item.asset_number}
+            </Link>
+          </p>
 
           <p className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-muted-foreground">
             <span>Reported by:</span>

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { CompleteLoadButton } from "@/components/loads/complete-load-button";
 import { DepartStopButton } from "@/components/loads/depart-stop-button";
 import { StopTrailerField } from "@/components/loads/stop-trailer-field";
 import {
@@ -8,6 +9,7 @@ import {
 } from "@/lib/loads/date";
 import {
   resolveCurrentStop,
+  shouldShowCompleteLoadOnHome,
   stopTypeLabel,
   stopTypeNameClass,
 } from "@/lib/loads/format";
@@ -202,6 +204,14 @@ export function WorkWeekHome({
     : null;
   const currentStop = currentStopInfo?.stop ?? null;
   const allStopsDeparted = currentStopInfo?.allDeparted ?? false;
+  const undepartedStopCount = activeLoad
+    ? activeLoad.load_stops.filter((s) => !s.completed).length
+    : 0;
+  const showCompleteLoad =
+    Boolean(activeLoad) &&
+    shouldShowCompleteLoadOnHome(activeLoad?.load_stops ?? []);
+  const showDepart =
+    Boolean(currentStop) && !allStopsDeparted && !showCompleteLoad;
   const currentTrailer =
     activeLoad?.trailer_number?.trim() ||
     null;
@@ -324,8 +334,35 @@ export function WorkWeekHome({
               </p>
             ) : null}
 
-            {currentStop && !allStopsDeparted && canManage ? (
-              <DepartStopButton stopId={currentStop.id} />
+            {canManage && showDepart && currentStop ? (
+              <div className="mt-3 space-y-1.5">
+                <p className="text-xs text-blue-700/75 dark:text-blue-200/70">
+                  Depart this stop to advance to the next.
+                </p>
+                <DepartStopButton stopId={currentStop.id} />
+              </div>
+            ) : null}
+
+            {canManage && showCompleteLoad && activeLoad ? (
+              <div className="mt-3 space-y-1.5">
+                <p className="text-xs text-blue-700/75 dark:text-blue-200/70">
+                  {allStopsDeparted
+                    ? "All stops departed — enter ending mileage and pay to close this load."
+                    : undepartedStopCount === 1
+                      ? "Last stop — enter ending mileage and pay to complete this load."
+                      : "Enter ending mileage and pay to close this load."}
+                </p>
+                <CompleteLoadButton
+                  loadId={activeLoad.id}
+                  loadDate={activeLoad.load_date}
+                  startingMileage={
+                    activeLoad.starting_mileage != null
+                      ? Number(activeLoad.starting_mileage)
+                      : null
+                  }
+                  variant="home"
+                />
+              </div>
             ) : null}
           </div>
         </section>

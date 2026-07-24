@@ -65,6 +65,18 @@ export function resolveCurrentStop(
 }
 
 /**
+ * Home Active Load: show Complete Load instead of Depart when at most one
+ * undeparted stop remains (that stop is current / last by delivery_order),
+ * or when every stop is already departed (edge case — load still active).
+ */
+export function shouldShowCompleteLoadOnHome(
+  stops: Pick<LoadStop, "completed">[],
+): boolean {
+  const undepartedCount = stops.filter((s) => !s.completed).length;
+  return undepartedCount <= 1;
+}
+
+/**
  * Trailer numbers for display: stop pickup trailers in delivery_order
  * (skip empty; dedupe consecutive). No separate starting-trailer field.
  *

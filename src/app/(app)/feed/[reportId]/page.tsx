@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/page-title";
 import { canViewDriverId } from "@/lib/auth/driver-id-visibility";
 import { damagePhotoUrl } from "@/lib/damage-photo";
+import { feedUnitHref } from "@/lib/feed/asset-number";
 import {
   safetyInboxStatusClassName,
   safetyInboxStatusLabel,
@@ -241,15 +242,17 @@ export default async function FeedReportDetailPage({ params }: PageProps) {
       <header className="mt-4">
         <h1 className={pageTitleClassName}>
           {assetLabel(row.asset_type)}{" "}
-          <span
+          <Link
+            href={feedUnitHref(row.asset_number)}
             className={
               row.asset_type === "tractor"
-                ? "font-bold text-brand"
-                : "font-bold text-accent"
+                ? "font-bold text-brand hover:underline"
+                : "font-bold text-accent hover:underline"
             }
+            title={`All damage reports for ${row.asset_number}`}
           >
             {row.asset_number}
-          </span>
+          </Link>
         </h1>
         <p className="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-sm text-muted-foreground">
           <time dateTime={row.captured_at}>

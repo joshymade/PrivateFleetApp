@@ -10,7 +10,10 @@ import {
   updateLoad,
   type LoadActionState,
 } from "@/lib/loads/actions";
-import { todayDateString } from "@/lib/loads/date";
+import {
+  isStartingMileageRequired,
+  todayDateString,
+} from "@/lib/loads/date";
 import type { Load, LoadStop, LoadStopType } from "@/types/database";
 
 const initial: LoadActionState = {};
@@ -61,6 +64,10 @@ export function LoadForm({
 }) {
   const action = mode === "create" ? createLoad : updateLoad;
   const [state, formAction, pending] = useActionState(action, initial);
+  const [loadDate, setLoadDate] = useState(
+    () => load?.load_date ?? defaultDate ?? todayDateString(),
+  );
+  const startingMileageRequired = isStartingMileageRequired(loadDate);
   const [stopRows, setStopRows] = useState<StopDraft[]>(() =>
     stops.length > 0
       ? stops
@@ -143,7 +150,8 @@ export function LoadForm({
             type="date"
             name="load_date"
             required
-            defaultValue={load?.load_date ?? defaultDate ?? todayDateString()}
+            value={loadDate}
+            onChange={(e) => setLoadDate(e.target.value)}
             className="min-h-11 w-full rounded-xl border border-border bg-background px-3 text-base text-foreground outline-none placeholder:text-muted-foreground focus:border-ring focus:ring-2 focus:ring-ring/30"
           />
         </label>
@@ -169,10 +177,15 @@ export function LoadForm({
           <input
             name="starting_mileage"
             inputMode="decimal"
-            required
+            required={startingMileageRequired}
             defaultValue={load?.starting_mileage ?? ""}
             className="min-h-11 w-full rounded-xl border border-border bg-background px-3 text-base text-foreground outline-none placeholder:text-muted-foreground focus:border-ring focus:ring-2 focus:ring-ring/30"
           />
+          {!startingMileageRequired ? (
+            <span className="mt-1 block text-xs text-muted-foreground">
+              Optional for past loads
+            </span>
+          ) : null}
         </label>
         {mode === "edit" ? (
           <label className="block text-sm">

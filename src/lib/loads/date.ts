@@ -11,6 +11,22 @@ export function todayDateString(): string {
   return toDateString(new Date());
 }
 
+/** Starting odometer required for same-day loads; optional when logging past loads. */
+export function isStartingMileageRequired(loadDate: string): boolean {
+  return loadDate === todayDateString();
+}
+
+/**
+ * Ending odometer required when starting was recorded, or when the load is today.
+ * Past loads with no starting mileage may complete without ending mileage.
+ */
+export function isEndingMileageRequired(
+  loadDate: string,
+  startingMileage: number | null | undefined,
+): boolean {
+  return startingMileage != null || isStartingMileageRequired(loadDate);
+}
+
 export function parseYearMonth(value: string | null | undefined): {
   year: number;
   month: number;

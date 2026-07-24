@@ -1,26 +1,17 @@
 import { Suspense } from "react";
-import { redirect } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { FeedPagination } from "@/components/feed/feed-pagination";
 import { FeedReportCard } from "@/components/feed/feed-report-card";
 import { FeedSearch } from "@/components/feed/feed-search";
-import {
-  FeedWeekCards,
-  type FeedWeekCardItem,
-} from "@/components/feed/feed-week-cards";
+import { BackLink } from "@/components/nav/back-link";
 import { pageTitleClassName } from "@/components/ui/page-title";
 import { damagePhotoUrl } from "@/lib/damage-photo";
 import {
   assetNumberDigits,
+  assetNumberMatchValues,
+  displayAssetNumberFromReports,
   feedUnitHref,
 } from "@/lib/feed/asset-number";
-import {
-  currentIsoWeek,
-  formatIsoWeekKey,
-  isoWeekPartsFromIso,
-  isoWeekRangeUtc,
-  parseIsoWeekKey,
-  shiftIsoWeek,
-} from "@/lib/feed/iso-week";
 import { createClient } from "@/lib/supabase/server";
 import type {
   AssetType,
@@ -29,16 +20,11 @@ import type {
   UserRole,
 } from "@/types/database";
 
-export const metadata = {
-  title: "Fleet Damage Feed",
-};
-
 const PAGE_SIZE = 20;
-/** Look back this many weeks (plus current) for week cards. */
-const WEEK_LOOKBACK = 15;
 
-type FeedPageProps = {
-  searchParams: Promise<{ q?: string; week?: string; page?: string }>;
+type PageProps = {
+  params: Promise<{ assetNumber: string }>;
+  searchParams: Promise<{ page?: string }>;
 };
 
 type ReportRow = Pick<
@@ -64,20 +50,32 @@ function parsePage(raw: string | undefined): number {
   return Math.floor(n);
 }
 
-export default async function FeedPage({ searchParams }: FeedPageProps) {
-  const params = await searchParams;
-  const queryRaw = params.q?.trim() ?? "";
-  const queryDigits = assetNumberDigits(queryRaw);
-  // Unit search opens the dedicated unit history page (digit-normalized).
-  if (queryDigits) {
-    redirect(feedUnitHref(queryDigits));
+export async function generateMetadata({ params }: PageProps) {
+  const { assetNumber: raw } = await params;
+  const digits = assetNumberDigits(decodeURIComponent(raw));
+  return {
+    title: digits ? `Unit ${digits} · Feed` : "Unit · Feed",
+  };
+}
+
+export default async function FeedUnitPage({ params, searchParams }: PageProps) {
+  const { assetNumber: rawParam } = await params;
+  const { page: pageParam } = await searchParams;
+  const decoded = decodeURIComponent(rawParam);
+  const digits = assetNumberDigits(decoded);
+
+  if (!digits) {
+    redirect("/feed");
   }
-  const weekParam = params.week?.trim() ?? "";
-  const selectedWeekParts = weekParam ? parseIsoWeekKey(weekParam) : null;
-  const selectedWeekKey = selectedWeekParts
-    ? formatIsoWeekKey(selectedWeekParts)
-    : null;
-  const requestedPage = parsePage(params.page);
+
+  // Canonical slug is digits-only (preserves display format on the page itself).
+  if (decoded !== digits) {
+    const qs = pageParam ? `?page=${encodeURIComponent(pageParam)}` : "";
+    redirect(`/feed/unit/${encodeURIComponent(digits)}${qs}`);
+  }
+
+  const requestedPage = parsePage(pageParam);
+  const matchValues = assetNumberMatchValues(digits);
 
   const supabase = await createClient();
   const {
@@ -87,9 +85,11 @@ export default async function FeedPage({ searchParams }: FeedPageProps) {
   if (!user) {
     return (
       <main className="mx-auto w-full max-w-lg p-6">
-        <h1 className={pageTitleClassName}>Fleet Damage Feed</h1>
-        <p className="mt-2 text-sm text-muted-foreground">
-          Sign in to view the latest damage reports.
+        <BackLink href="/feed" aria-label="Back to Feed">
+          Feed
+        </BackLink>
+        <p className="mt-4 text-sm text-muted-foreground">
+          Sign in to view damage reports for this unit.
         </p>
       </main>
     );
@@ -101,34 +101,18 @@ export default async function FeedPage({ searchParams }: FeedPageProps) {
     .eq("id", user.id)
     .maybeSingle();
   const viewerRole = (viewerProfile?.role as UserRole | undefined) ?? "driver";
-  // Safety uses the referred-inbox Feed, not the full fleet feed.
   if (viewerRole === "safety") {
     redirect("/safety/inbox");
   }
 
-  const now = new Date();
-  const currentWeek = currentIsoWeek(now);
-  const currentWeekKey = formatIsoWeekKey(currentWeek);
-  const lookbackStart = shiftIsoWeek(currentWeek, -WEEK_LOOKBACK);
-  const { startIso: lookbackStartIso } = isoWeekRangeUtc(lookbackStart);
+  const assetFilter = matchValues
+    .map((v) => `asset_number.eq."${v.replace(/"/g, '\\"')}"`)
+    .join(",");
 
-  let weekCountsQuery = supabase
+  const { count: totalCountRaw } = await supabase
     .from("damage_reports_with_notice_count")
-    .select("captured_at")
-    .gte("captured_at", lookbackStartIso)
-    .order("captured_at", { ascending: false });
-
-  let countQuery = supabase
-    .from("damage_reports_with_notice_count")
-    .select("id", { count: "exact", head: true });
-
-  if (selectedWeekParts) {
-    const { startIso, endIso } = isoWeekRangeUtc(selectedWeekParts);
-    countQuery = countQuery.gte("captured_at", startIso).lt("captured_at", endIso);
-  }
-
-  const [{ count: totalCountRaw }, { data: weekCapturedAt, error: weekError }] =
-    await Promise.all([countQuery, weekCountsQuery]);
+    .select("id", { count: "exact", head: true })
+    .or(assetFilter);
 
   const totalCount = totalCountRaw ?? 0;
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
@@ -136,62 +120,27 @@ export default async function FeedPage({ searchParams }: FeedPageProps) {
   const from = (page - 1) * PAGE_SIZE;
   const to = from + PAGE_SIZE - 1;
 
-  let reportsQuery = supabase
+  const { data, error } = await supabase
     .from("damage_reports_with_notice_count")
     .select(
       "id, asset_type, asset_number, driver_id, reported_by, report_comment, captured_at, latitude, longitude, r2_key, r2_url, notice_count, view_count",
     )
+    .or(assetFilter)
     .order("captured_at", { ascending: false })
     .range(from, to);
 
-  if (selectedWeekParts) {
-    const { startIso, endIso } = isoWeekRangeUtc(selectedWeekParts);
-    reportsQuery = reportsQuery
-      .gte("captured_at", startIso)
-      .lt("captured_at", endIso);
-  }
-
-  const { data, error } = await reportsQuery;
-
-  const countByWeek = new Map<string, number>();
-  for (const row of weekCapturedAt ?? []) {
-    const parts = isoWeekPartsFromIso(row.captured_at as string);
-    if (!parts) continue;
-    const key = formatIsoWeekKey(parts);
-    countByWeek.set(key, (countByWeek.get(key) ?? 0) + 1);
-  }
-
-  // Contiguous lookback including empty weeks (0 reports still shown / clickable).
-  const weekCards: FeedWeekCardItem[] = [];
-  for (let i = 0; i <= WEEK_LOOKBACK; i++) {
-    const parts = shiftIsoWeek(currentWeek, -i);
-    const key = formatIsoWeekKey(parts);
-    weekCards.push({
-      key,
-      week: parts.week,
-      year: parts.year,
-      count: countByWeek.get(key) ?? 0,
-      isCurrent: key === currentWeekKey,
-    });
-  }
-  // Chronological left→right (oldest → newest) so current week is at the end
-  weekCards.reverse();
-
-  if (
-    selectedWeekKey &&
-    selectedWeekParts &&
-    !weekCards.some((w) => w.key === selectedWeekKey)
-  ) {
-    weekCards.unshift({
-      key: selectedWeekKey,
-      week: selectedWeekParts.week,
-      year: selectedWeekParts.year,
-      count: totalCount,
-      isCurrent: selectedWeekKey === currentWeekKey,
-    });
-  }
-
   const rows = (data ?? []) as ReportRow[];
+  const displayNumber = displayAssetNumberFromReports(
+    digits,
+    rows.map((r) => r.asset_number),
+  );
+  const assetType = rows[0]?.asset_type as AssetType | undefined;
+  const numberClass =
+    assetType === "tractor"
+      ? "font-bold text-brand"
+      : assetType === "trailer"
+        ? "font-bold text-accent"
+        : "font-bold text-foreground";
 
   const reportIds = rows.map((r) => r.id);
   const reporterIds = [...new Set(rows.map((r) => r.reported_by))];
@@ -217,7 +166,6 @@ export default async function FeedPage({ searchParams }: FeedPageProps) {
               work_state: string | null;
             }[],
           }),
-      // RLS: sender (and safety/admin) can read referral status for the tag.
       reportIds.length > 0
         ? supabase
             .from("safety_inbox_items")
@@ -244,22 +192,35 @@ export default async function FeedPage({ searchParams }: FeedPageProps) {
   for (const row of inboxRows ?? []) {
     const reportId = row.damage_report_id as string;
     if (!inboxStatusByReportId.has(reportId)) {
-      inboxStatusByReportId.set(
-        reportId,
-        row.status as SafetyInboxStatus,
-      );
+      inboxStatusByReportId.set(reportId, row.status as SafetyInboxStatus);
     }
   }
 
-  const listError = error ?? weekError;
+  if (matchValues.length === 0) {
+    notFound();
+  }
 
   return (
     <main className="mx-auto w-full max-w-lg space-y-5 px-4 pb-6 pt-3">
+      <BackLink href="/feed" aria-label="Back to Feed">
+        Feed
+      </BackLink>
+
       <header>
-        <h1 className={pageTitleClassName}>Fleet Damage Feed</h1>
+        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          Feed
+        </p>
+        <h1 className={pageTitleClassName}>
+          <span className={numberClass}>{displayNumber}</span>
+        </h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Real-time damage reports submitted by our private fleet drivers.
-          Search a trailer/tractor unit here before tagging new defects.
+          All damage reports for this{" "}
+          {assetType === "tractor"
+            ? "tractor"
+            : assetType === "trailer"
+              ? "trailer"
+              : "unit"}
+          .
         </p>
       </header>
 
@@ -268,23 +229,14 @@ export default async function FeedPage({ searchParams }: FeedPageProps) {
           <div className="min-h-12 rounded-xl border border-brand/40 bg-card shadow-sm" />
         }
       >
-        <FeedSearch />
+        <FeedSearch key={digits} initialQuery={displayNumber} />
       </Suspense>
 
-      <FeedWeekCards
-        weeks={weekCards}
-        selectedWeek={selectedWeekKey}
-        query=""
-        currentYear={currentWeek.year}
-      />
-
-      {listError ? (
-        <p className="text-sm text-destructive">{listError.message}</p>
+      {error ? (
+        <p className="text-sm text-destructive">{error.message}</p>
       ) : rows.length === 0 ? (
         <p className="rounded-2xl border border-border bg-card px-4 py-6 text-center text-sm text-muted-foreground">
-          {selectedWeekKey
-            ? "No damage reports for this week."
-            : "All clear! No recent damage reports found for the fleet today."}
+          No damage reports for unit “{displayNumber}”.
         </p>
       ) : (
         <ul>
@@ -321,7 +273,7 @@ export default async function FeedPage({ searchParams }: FeedPageProps) {
         page={page}
         totalPages={totalCount === 0 ? 0 : totalPages}
         totalCount={totalCount}
-        week={selectedWeekKey}
+        hrefForPage={(p) => feedUnitHref(digits, { page: p })}
       />
     </main>
   );

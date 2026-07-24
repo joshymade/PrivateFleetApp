@@ -235,6 +235,7 @@ export default async function LoadDetailPage({
           {load.status === "active" ? (
             <CompleteLoadButton
               loadId={load.id}
+              loadDate={load.load_date}
               startingMileage={
                 load.starting_mileage != null
                   ? Number(load.starting_mileage)

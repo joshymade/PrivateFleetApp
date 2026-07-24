@@ -7,7 +7,11 @@ import {
   PROFILE_INCOMPLETE_MESSAGE,
 } from "@/lib/auth/profile-complete";
 import { createClient } from "@/lib/supabase/server";
-import { todayDateString } from "@/lib/loads/date";
+import {
+  isEndingMileageRequired,
+  isStartingMileageRequired,
+  todayDateString,
+} from "@/lib/loads/date";
 import type { LoadStopType, UserRole } from "@/types/database";
 
 export type LoadActionState = {
@@ -189,8 +193,12 @@ export async function createLoad(
   if (!loadNumber) {
     return { error: "Load number is required." };
   }
-  if (!startingMileageRaw || Number.isNaN(startingMileage)) {
-    return { error: "Starting mileage is required." };
+  if (isStartingMileageRequired(loadDate)) {
+    if (!startingMileageRaw || Number.isNaN(startingMileage)) {
+      return { error: "Starting mileage is required." };
+    }
+  } else if (startingMileageRaw && Number.isNaN(startingMileage)) {
+    return { error: "Starting mileage must be a number." };
   }
   if (startingMileage != null && startingMileage < 0) {
     return { error: "Starting mileage must be zero or greater." };
@@ -296,8 +304,12 @@ export async function updateLoad(
   if (!loadNumber || !loadDate) {
     return { error: "Load number and date are required." };
   }
-  if (!startingMileageRaw || Number.isNaN(startingMileage)) {
-    return { error: "Starting mileage is required." };
+  if (isStartingMileageRequired(loadDate)) {
+    if (!startingMileageRaw || Number.isNaN(startingMileage)) {
+      return { error: "Starting mileage is required." };
+    }
+  } else if (startingMileageRaw && Number.isNaN(startingMileage)) {
+    return { error: "Starting mileage must be a number." };
   }
   if (startingMileage != null && startingMileage < 0) {
     return { error: "Starting mileage must be zero or greater." };
@@ -492,12 +504,13 @@ export async function updateStopTrailerNumber(
 }
 
 /**
- * Mark load complete: require ending mileage + pay amount, check all stops,
- * clear current trailer, set status completed, then auto-activate oldest pending.
+ * Mark load complete: require pay amount; ending mileage when starting was set
+ * or load_date is today. Check all stops, clear current trailer, set status
+ * completed, then auto-activate oldest pending.
  */
 export async function completeLoad(
   loadId: string,
-  input?: { endingMileage?: number; payAmount?: number },
+  input?: { endingMileage?: number | null; payAmount?: number },
 ): Promise<LoadActionState> {
   const { supabase, error, user } = await requireWriter();
   if (error || !user) return { error: error ?? "Sign in to manage loads." };
@@ -505,19 +518,20 @@ export async function completeLoad(
   const id = loadId.trim();
   if (!id) return { error: "Missing load." };
 
-  const endingMileage = Number(input?.endingMileage);
+  const endingRaw = input?.endingMileage;
+  const endingMileage =
+    endingRaw != null && Number.isFinite(Number(endingRaw))
+      ? Number(endingRaw)
+      : null;
   const payAmount = Number(input?.payAmount);
 
-  if (!Number.isFinite(endingMileage)) {
-    return { error: "Ending mileage is required." };
-  }
   if (!Number.isFinite(payAmount) || payAmount < 0) {
     return { error: "Pay amount is required." };
   }
 
   const { data: load, error: loadError } = await supabase
     .from("loads")
-    .select("id, status, assigned_driver_id, starting_mileage")
+    .select("id, status, assigned_driver_id, starting_mileage, load_date")
     .eq("id", id)
     .eq("assigned_driver_id", user.id)
     .maybeSingle();
@@ -528,7 +542,19 @@ export async function completeLoad(
   if (load.status !== "active") {
     return { error: "Only active loads can be completed." };
   }
-  if (load.starting_mileage != null && endingMileage < Number(load.starting_mileage)) {
+
+  const endingRequired = isEndingMileageRequired(
+    load.load_date,
+    load.starting_mileage != null ? Number(load.starting_mileage) : null,
+  );
+  if (endingRequired && endingMileage == null) {
+    return { error: "Ending mileage is required." };
+  }
+  if (
+    endingMileage != null &&
+    load.starting_mileage != null &&
+    endingMileage < Number(load.starting_mileage)
+  ) {
     return {
       error: "Ending mileage must be greater than or equal to starting mileage.",
     };

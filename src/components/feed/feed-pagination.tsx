@@ -44,12 +44,15 @@ export function FeedPagination({
   totalCount,
   week,
   query,
+  hrefForPage,
 }: {
   page: number;
   totalPages: number;
   totalCount: number;
-  week: string | null;
-  query: string;
+  week?: string | null;
+  query?: string;
+  /** Override link builder (e.g. unit history pages). */
+  hrefForPage?: (page: number) => string;
 }) {
   if (totalCount === 0) return null;
 
@@ -63,6 +66,9 @@ export function FeedPagination({
 
   const q = query || undefined;
   const weekParam = week || undefined;
+  const pageHref =
+    hrefForPage ??
+    ((p: number) => feedHref({ week: weekParam, page: p, q }));
   const prev = Math.max(1, page - 1);
   const next = Math.min(totalPages, page + 1);
   const atStart = page <= 1;
@@ -76,14 +82,14 @@ export function FeedPagination({
       <div className="flex w-full items-center justify-between gap-2">
         <div className="flex items-center gap-1.5">
           <PageControl
-            href={feedHref({ week: weekParam, page: 1, q })}
+            href={pageHref(1)}
             label="First page"
             disabled={atStart}
           >
             <ChevronFirst className="size-5" aria-hidden />
           </PageControl>
           <PageControl
-            href={feedHref({ week: weekParam, page: prev, q })}
+            href={pageHref(prev)}
             label="Previous page"
             disabled={atStart}
           >
@@ -97,14 +103,14 @@ export function FeedPagination({
 
         <div className="flex items-center gap-1.5">
           <PageControl
-            href={feedHref({ week: weekParam, page: next, q })}
+            href={pageHref(next)}
             label="Next page"
             disabled={atEnd}
           >
             <ChevronRight className="size-5" aria-hidden />
           </PageControl>
           <PageControl
-            href={feedHref({ week: weekParam, page: totalPages, q })}
+            href={pageHref(totalPages)}
             label="Last page"
             disabled={atEnd}
           >
