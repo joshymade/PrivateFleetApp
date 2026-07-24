@@ -42,7 +42,7 @@
 
 ### Phase 6 polish (open items)
 
-- [ ] Make Report camera capture open the device camera by default
+- [x] Make Report camera capture open the device camera by default
 - [ ] Add shared app-header top padding / safe-area handling
 - [ ] Improve GPS freshness / accuracy on damage reports
 - [ ] Finish true PWA hardening (install CTA, safe areas, install smoke tests, light offline shell)
@@ -164,9 +164,8 @@ Aligned with [docs/BUILD_PLAN.md](docs/BUILD_PLAN.md) **Phased MVP build order**
 - [ ] Mobile UX + empty/error states polish
 - [ ] Tighten RLS / company scoping later
 - [ ] Next 16: migrate `src/middleware.ts` → `proxy.ts` (deprecated middleware convention; keep until polish)
-- [ ] Report photo uploader opens the **device camera** by default (not gallery/media library first)
-  - Current: `src/components/camera/photo-capture.tsx` uses `<input type="file" accept="image/*">` with **no** `capture` attribute (button copy says “Open Camera” but OS often opens the media picker).
-  - Planned: add `capture="environment"` (rear camera) on the Report file input; keep `accept="image/*"`.
+- [x] Report photo uploader opens the **device camera** by default (not gallery/media library first)
+  - Done: `src/components/camera/photo-capture.tsx` — “Open Camera” uses `<input accept="image/*" capture="environment">`; separate “Choose from library” input has no `capture`.
   - Stretch if needed: `getUserMedia` live preview.
   - Verify on iOS Safari + Android Chrome; desktop keeps file-picker fallback.
 - [ ] Add more **top padding** to the shared app header on all authenticated pages
@@ -183,7 +182,7 @@ Aligned with [docs/BUILD_PLAN.md](docs/BUILD_PLAN.md) **Phased MVP build order**
   - Offline: keep `/~offline` fallback; minimal shell caching for auth/app chrome (don’t over-cache authenticated API/R2).
   - Align `start_url` / scope with post-login entry (e.g. `/` → home) — verify in production HTTPS.
 
-**Remaining gaps (Phase 6):** camera `capture` on Report, shared header top/safe-area padding, mobile GPS quality, true-PWA hardening (install CTA + safe areas + install smoke tests), Mobile UX/errors, RLS/company scoping, and middleware→`proxy.ts`.
+**Remaining gaps (Phase 6):** shared header top/safe-area padding, mobile GPS quality, true-PWA hardening (install CTA + safe areas + install smoke tests), Mobile UX/errors, RLS/company scoping, and middleware→`proxy.ts`.
 
 ### Later (not MVP-blocking)
 
@@ -397,7 +396,7 @@ Full checklists: [supabase-env-checklist.md](docs/supabase-env-checklist.md), [r
 - [x] `R2_PUBLIC_URL` public/CDN base set (`*.r2.dev`)
 - [x] Switched primary backend from self-hosted to Supabase Cloud
 
-**Scaffold note:** Phases 1–5 + most post-MVP feed/safety/profile work are implemented. Remaining gaps are Phase 6 polish (Report camera `capture`, header/safe-area padding, mobile GPS quality, true-PWA install/safe-area hardening, Mobile UX, middleware→proxy, RLS tightening) plus Manual Auth/R2/production checklist.
+**Scaffold note:** Phases 1–5 + most post-MVP feed/safety/profile work are implemented. Remaining gaps are Phase 6 polish (header/safe-area padding, mobile GPS quality, true-PWA install/safe-area hardening, Mobile UX, middleware→proxy, RLS tightening) plus Manual Auth/R2/production checklist.
 
 </details>
 
