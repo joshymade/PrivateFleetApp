@@ -14,6 +14,9 @@ export function hrefForNotification(n: AppNotification): string | null {
   if (n.type === "inbox_referral" && n.safety_inbox_item_id) {
     return `/safety/inbox/${n.safety_inbox_item_id}`;
   }
+  if (n.type === "deletion_request") {
+    return "/admin/deletion-requests";
+  }
   if (n.type === "inbox_status" && n.damage_report_id) {
     return `/feed/${n.damage_report_id}`;
   }

@@ -128,8 +128,9 @@ export async function listAdminUsers(): Promise<{
   const { data, error } = await supabase
     .from("profiles")
     .select(
-      "id, driver_id, email, full_name, role, disabled_at, created_at, updated_at",
+      "id, driver_id, email, full_name, role, disabled_at, created_at, updated_at, is_system_anonymous",
     )
+    .eq("is_system_anonymous", false)
     .order("created_at", { ascending: true });
 
   if (error) return { users: [], error: error.message };
@@ -179,13 +180,17 @@ export async function getAdminUserDetail(
   const { data: profile, error } = await supabase
     .from("profiles")
     .select(
-      "id, driver_id, email, full_name, role, disabled_at, created_at, updated_at",
+      "id, driver_id, email, full_name, role, disabled_at, created_at, updated_at, is_system_anonymous",
     )
     .eq("id", userId)
     .maybeSingle();
 
   if (error) return { user: null, error: error.message };
   if (!profile) return { user: null, error: "User not found." };
+
+  if ((profile as { is_system_anonymous?: boolean }).is_system_anonymous) {
+    return { user: null, error: "System profiles cannot be managed here." };
+  }
 
   const typed = profile as ProfileRow;
 

@@ -21,7 +21,7 @@
 
 | Track | Status | Notes |
 | --- | --- | --- |
-| Supabase Cloud (`mvrbfyoujggqazsicgal`) | **OK** | `ACTIVE_HEALTHY`; migrations through `027_trailer_history_on_current_only` applied |
+| Supabase Cloud (`mvrbfyoujggqazsicgal`) | **OK** | `ACTIVE_HEALTHY`; migrations through `033_anonymous_driver_deletion_requests` applied |
 | App env | **OK** | `.env.local` → `https://mvrbfyoujggqazsicgal.supabase.co`; publishable key matches dashboard |
 | Migrations `001`–`009` (core MVP) | **Applied** | Init, comments, notice RLS, notifications, signup/role locks, notice view, photos, work_state |
 | Migrations `010`–`027` (loads / feed / safety / profile) | **Applied** | Load stops/trailers, one-active/pending, view counts, nested replies, safety scope, admin delete, inbox RLS fix, identity edits, reply notify, safety home stats, notification copy, comment beeps, trailer history on current only |
@@ -333,6 +333,16 @@ Admin bottom-nav **Users** tab with list/detail, contact reply messaging, disabl
 4. [x] Contact thread + admin reply → driver Contact tabs Compose | Inbox (`contact_replies`, mark read).
 5. [x] Disable / re-enable (`disabled_at` + Auth ban); middleware + login lockout; delete account; reset reports; reset loads (confirmations).
 6. [x] Verify tsc + eslint on touched files.
+
+### Feature 15: Driver reset + anonymous untag + deletion requests — suggested 2026-07-23
+
+Account reset controls, Anonymous Driver system profile, report untag, and admin deletion-request inbox.
+
+1. [x] Migration `033`: `profiles.is_system_anonymous` + Anonymous Driver seed; `damage_reports.original_reported_by`; `report_deletion_requests`; anonymize/untag RPCs; notification types; apply on Cloud; update `database.ts`.
+2. [x] Account Settings: Reset loads + Reset damage reports (ClickableTooltip + confirm); `resetOwnLoads` / `anonymizeOwnDamageReports`.
+3. [x] Feed report detail: Untag / Request deletion (original reporter); admin `/admin/deletion-requests` Approve (delete) / Dismiss.
+4. [x] Notifications for admin (new request) and driver (approved / dismissed); Account link to deletion inbox.
+5. [x] Verify tsc + eslint on touched files.
 
 ---
 

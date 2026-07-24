@@ -95,7 +95,7 @@ function buildNavItems(
       href: "/admin/users",
       label: "Users",
       icon: Users,
-      match: (p) => p === "/admin/users" || p.startsWith("/admin/users/"),
+      match: (p) => p === "/admin/users" || p.startsWith("/admin/"),
     });
   }
 

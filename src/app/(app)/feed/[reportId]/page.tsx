@@ -5,6 +5,7 @@ import { DeleteReportButton } from "@/components/feed/delete-report-button";
 import { NoticeButton } from "@/components/feed/notice-button";
 import { ReplyThread, type FeedReply } from "@/components/feed/reply-thread";
 import { ReportPhotoGallery } from "@/components/feed/report-photo-gallery";
+import { ReportPrivacyActions } from "@/components/feed/report-privacy-actions";
 import { ReportViewTracker } from "@/components/feed/report-view-tracker";
 import { SendToSafetyButton } from "@/components/feed/send-to-safety-button";
 import { StateIcon } from "@/components/icons";
@@ -17,6 +18,7 @@ import {
   pageTitleColorClassName,
 } from "@/components/ui/page-title";
 import { canViewDriverId } from "@/lib/auth/driver-id-visibility";
+import { isAnonymousReporter } from "@/lib/damage/anonymous";
 import { damagePhotoUrl } from "@/lib/damage-photo";
 import { feedUnitHref } from "@/lib/feed/asset-number";
 import {
@@ -87,6 +89,7 @@ export default async function FeedReportDetailPage({ params }: PageProps) {
     { data: reporterProfile },
     { data: inboxReferral },
     { data: photoRows },
+    { data: pendingDeletion },
   ] = await Promise.all([
     supabase
       .from("damage_notices")
@@ -107,7 +110,7 @@ export default async function FeedReportDetailPage({ params }: PageProps) {
       .maybeSingle(),
     supabase
       .from("profiles")
-      .select("id, full_name, work_state, driver_id")
+      .select("id, full_name, work_state, driver_id, is_system_anonymous")
       .eq("id", row.reported_by)
       .maybeSingle(),
     supabase
@@ -121,6 +124,13 @@ export default async function FeedReportDetailPage({ params }: PageProps) {
       .select("id, damage_report_id, r2_key, r2_url, sort_order, created_at")
       .eq("damage_report_id", reportId)
       .order("sort_order", { ascending: true }),
+    supabase
+      .from("report_deletion_requests")
+      .select("id")
+      .eq("damage_report_id", reportId)
+      .eq("requested_by", user.id)
+      .eq("status", "pending")
+      .maybeSingle(),
   ]);
 
   const roleEarly = (profile?.role as UserRole | undefined) ?? "driver";
@@ -176,14 +186,32 @@ export default async function FeedReportDetailPage({ params }: PageProps) {
   const isAdmin = role === "admin";
   const isSafety = role === "safety";
   const isOwnReport = row.reported_by === user.id;
+  const isOriginalReporter =
+    (row.original_reported_by ?? row.reported_by) === user.id;
+  const reportIsAnonymous =
+    isAnonymousReporter(row.reported_by) ||
+    Boolean(
+      (reporterProfile as { is_system_anonymous?: boolean } | null)
+        ?.is_system_anonymous,
+    );
+  const canUntag =
+    role === "driver" && isOriginalReporter && isOwnReport && !reportIsAnonymous;
+  const hasPendingDeletionRequest = Boolean(pendingDeletion);
+  const canRequestDeletion =
+    role === "driver" &&
+    isOriginalReporter &&
+    reportIsAnonymous &&
+    !hasPendingDeletionRequest;
   const showComments = !isSafety;
   const showNotice = !isSafety && !isOwnReport;
   const feedBackHref = isSafety ? "/safety/inbox" : "/feed";
-  const showReportDriverId = canViewDriverId({
-    viewerRole: role,
-    viewerUserId: user.id,
-    subjectUserId: row.reported_by,
-  });
+  const showReportDriverId =
+    !reportIsAnonymous &&
+    canViewDriverId({
+      viewerRole: role,
+      viewerUserId: user.id,
+      subjectUserId: row.reported_by,
+    });
   const reportDriverId = showReportDriverId
     ? (row.driver_id ??
       (reporterProfile?.driver_id as string | null | undefined) ??
@@ -217,13 +245,16 @@ export default async function FeedReportDetailPage({ params }: PageProps) {
       })
     : [];
 
-  const reporterName = displayFirstOrFull(
-    (reporterProfile?.full_name as string | null | undefined) ?? null,
-    "",
-  );
-  const workState =
-    ((reporterProfile?.work_state as string | null | undefined) ?? "").trim() ||
-    null;
+  const reporterName = reportIsAnonymous
+    ? "Anonymous Driver"
+    : displayFirstOrFull(
+        (reporterProfile?.full_name as string | null | undefined) ?? null,
+        "",
+      );
+  const workState = reportIsAnonymous
+    ? null
+    : ((reporterProfile?.work_state as string | null | undefined) ?? "").trim() ||
+      null;
   const workStateLabel = workState ? usStateName(workState) : null;
 
   const hasLocation = row.latitude != null && row.longitude != null;
@@ -385,6 +416,12 @@ export default async function FeedReportDetailPage({ params }: PageProps) {
             isOwner={isOwnReport}
           />
         ) : null}
+        <ReportPrivacyActions
+          reportId={row.id}
+          canUntag={canUntag}
+          canRequestDeletion={canRequestDeletion}
+          hasPendingDeletionRequest={hasPendingDeletionRequest}
+        />
         <Link
           href={`/export?reportId=${encodeURIComponent(row.id)}&autodownload=1`}
           className="min-h-11 rounded-lg border border-border px-4 py-2.5 text-center text-sm font-medium text-foreground"

@@ -343,3 +343,96 @@ export async function sendToSafety(
   revalidatePath("/home");
   return { ok: true };
 }
+
+/**
+ * Untag the caller from a report (reassign to Anonymous Driver).
+ * Caller must be the original reporting driver and still tagged.
+ */
+export async function untagDamageReport(
+  reportId: string,
+): Promise<ActionResult> {
+  const { supabase, user, error } = await requireUser();
+  if (!user) return { ok: false, error: error ?? "Sign in required." };
+
+  const { error: rpcError } = await supabase.rpc("untag_damage_report", {
+    p_report_id: reportId,
+  });
+
+  if (rpcError) return { ok: false, error: rpcError.message };
+
+  for (const path of feedPaths(reportId)) revalidatePath(path);
+  revalidatePath("/account/notifications");
+  return { ok: true };
+}
+
+/**
+ * Request admin deletion of an already-untagged report.
+ * Only the original reporter may request; report must be Anonymous.
+ */
+export async function requestReportDeletion(
+  reportId: string,
+  message?: string,
+): Promise<ActionResult> {
+  const { supabase, user, error } = await requireUser();
+  if (!user) return { ok: false, error: error ?? "Sign in required." };
+
+  const trimmed = message?.trim() || null;
+  if (trimmed && trimmed.length > 2000) {
+    return { ok: false, error: "Message is too long." };
+  }
+
+  const { data: report, error: reportError } = await supabase
+    .from("damage_reports")
+    .select("id, reported_by, original_reported_by")
+    .eq("id", reportId)
+    .maybeSingle();
+
+  if (reportError) return { ok: false, error: reportError.message };
+  if (!report) return { ok: false, error: "Report not found." };
+  if (report.original_reported_by !== user.id) {
+    return {
+      ok: false,
+      error: "Only the original reporting driver can request deletion.",
+    };
+  }
+
+  const { data: anonId } = await supabase.rpc("anonymous_profile_id");
+  if (!anonId || report.reported_by !== anonId) {
+    return {
+      ok: false,
+      error: "Untag yourself from this report before requesting deletion.",
+    };
+  }
+
+  const { data: existing } = await supabase
+    .from("report_deletion_requests")
+    .select("id")
+    .eq("damage_report_id", reportId)
+    .eq("status", "pending")
+    .maybeSingle();
+
+  if (existing) {
+    return { ok: false, error: "A deletion request is already pending." };
+  }
+
+  const { error: insertError } = await supabase
+    .from("report_deletion_requests")
+    .insert({
+      damage_report_id: reportId,
+      requested_by: user.id,
+      message: trimmed,
+      status: "pending",
+    });
+
+  if (insertError) {
+    if (insertError.code === "23505") {
+      return { ok: false, error: "A deletion request is already pending." };
+    }
+    return { ok: false, error: insertError.message };
+  }
+
+  for (const path of feedPaths(reportId)) revalidatePath(path);
+  revalidatePath("/admin/deletion-requests");
+  revalidatePath("/account/notifications");
+  return { ok: true };
+}

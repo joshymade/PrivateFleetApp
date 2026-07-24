@@ -511,3 +511,72 @@ export async function markContactRepliesRead(
   if (updateError) return { ok: false, error: updateError.message };
   return { ok: true };
 }
+
+/** Delete all loads assigned to the signed-in driver (blank slate). */
+export async function resetOwnLoads(): Promise<
+  ActionResult & { deleted?: number }
+> {
+  const { supabase, user, error } = await requireUser();
+  if (!user) return { ok: false, error: error ?? "Sign in required." };
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("role, is_system_anonymous")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  if (profile?.role !== "driver" || profile.is_system_anonymous) {
+    return { ok: false, error: "Only drivers can reset their loads." };
+  }
+
+  const { error: deleteError, count } = await supabase
+    .from("loads")
+    .delete({ count: "exact" })
+    .eq("assigned_driver_id", user.id);
+
+  if (deleteError) return { ok: false, error: deleteError.message };
+
+  revalidateAccountSurfaces();
+  revalidatePath("/loads");
+  revalidatePath("/home");
+  return { ok: true, deleted: count ?? 0 };
+}
+
+/**
+ * Reassign all of the driver's damage reports to Anonymous Driver.
+ * Reports stay on the Feed; original_reported_by is preserved.
+ */
+export async function anonymizeOwnDamageReports(): Promise<
+  ActionResult & { anonymized?: number }
+> {
+  const { supabase, user, error } = await requireUser();
+  if (!user) return { ok: false, error: error ?? "Sign in required." };
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("role, is_system_anonymous")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  if (profile?.role !== "driver" || profile.is_system_anonymous) {
+    return {
+      ok: false,
+      error: "Only drivers can reset damage report tags.",
+    };
+  }
+
+  const { data, error: rpcError } = await supabase.rpc(
+    "anonymize_own_damage_reports",
+  );
+
+  if (rpcError) return { ok: false, error: rpcError.message };
+
+  revalidateAccountSurfaces();
+  revalidatePath("/feed");
+  revalidatePath("/feed", "layout");
+  revalidatePath("/account/notifications");
+  return {
+    ok: true,
+    anonymized: typeof data === "number" ? data : Number(data ?? 0),
+  };
+}

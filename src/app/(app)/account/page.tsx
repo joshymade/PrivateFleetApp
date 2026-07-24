@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { AccountNavCard } from "@/components/account/account-nav-card";
+import { AccountDataResetButtons } from "@/components/account/account-data-reset-buttons";
 import { AdpHistorySection } from "@/components/account/adp-history-section";
 import { DriverWeekSettings } from "@/components/account/driver-week-settings";
 import { SignOutButton } from "@/components/auth/sign-out-button";
@@ -42,6 +43,7 @@ export default async function AccountPage() {
     (profile?.identity_changes_remaining ?? 0) === 1;
 
   let pendingInbox: number | null = null;
+  let pendingDeletionRequests: number | null = null;
   let adpEntries: AdpEntry[] = [];
 
   const supabase = await createClient();
@@ -51,6 +53,14 @@ export default async function AccountPage() {
       .select("id", { count: "exact", head: true })
       .eq("status", "pending");
     pendingInbox = count ?? 0;
+  }
+
+  if (canAccessAdminUsers(role)) {
+    const { count } = await supabase
+      .from("report_deletion_requests")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "pending");
+    pendingDeletionRequests = count ?? 0;
   }
 
   if (role === "driver" && !setupMode) {
@@ -167,6 +177,7 @@ export default async function AccountPage() {
             offDays={offDays}
             currentTruckNumber={profile?.current_truck_number ?? null}
           />
+          <AccountDataResetButtons />
           <div className="border-t border-border pt-4">
             <AdpHistorySection entries={adpEntries} />
           </div>
@@ -231,14 +242,28 @@ export default async function AccountPage() {
                 </li>
               ) : null}
               {canAccessAdminUsers(role) ? (
-                <li>
-                  <Link
-                    href="/admin/users"
-                    className="font-medium text-brand underline-offset-2 hover:underline"
-                  >
-                    Manage users
-                  </Link>
-                </li>
+                <>
+                  <li>
+                    <Link
+                      href="/admin/users"
+                      className="font-medium text-brand underline-offset-2 hover:underline"
+                    >
+                      Manage users
+                    </Link>
+                  </li>
+                  <li>
+                    <Link
+                      href="/admin/deletion-requests"
+                      className="font-medium text-brand underline-offset-2 hover:underline"
+                    >
+                      Deletion requests
+                      {pendingDeletionRequests != null &&
+                      pendingDeletionRequests > 0
+                        ? ` (${pendingDeletionRequests} pending)`
+                        : ""}
+                    </Link>
+                  </li>
+                </>
               ) : null}
             </ul>
           ) : null}

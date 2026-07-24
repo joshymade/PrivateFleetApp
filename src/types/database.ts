@@ -40,6 +40,10 @@ export type Profile = {
    * Cleared to re-enable.
    */
   disabled_at: string | null;
+  /**
+   * Dedicated system Anonymous Driver profile used when a driver untags a report.
+   */
+  is_system_anonymous: boolean;
   created_at: string;
   updated_at: string;
 };
@@ -139,6 +143,10 @@ export type LoadTrailerHistory = {
   note: string | null;
 };
 
+/** Fixed UUID of the system Anonymous Driver profile (migration 033). */
+export const ANONYMOUS_DRIVER_PROFILE_ID =
+  "a0000000-0000-4000-8000-0000000000a1" as const;
+
 export type DamageReport = {
   id: string;
   asset_type: AssetType;
@@ -146,6 +154,10 @@ export type DamageReport = {
   /** Snapshot of company Driver ID at capture (may be null for edge cases). */
   driver_id: string | null;
   reported_by: string;
+  /**
+   * Reporting driver at create time. Preserved after untag for deletion-request auth.
+   */
+  original_reported_by: string | null;
   load_id: string | null;
   route_number: string | null;
   latitude: number | null;
@@ -219,7 +231,10 @@ export type NotificationType =
   | "report_comment"
   | "inbox_status"
   | "inbox_referral"
-  | "load_assigned";
+  | "load_assigned"
+  | "deletion_request"
+  | "deletion_approved"
+  | "deletion_dismissed";
 
 export type AppNotification = {
   id: string;
@@ -232,6 +247,22 @@ export type AppNotification = {
   load_id: string | null;
   actor_id: string | null;
   read_at: string | null;
+  created_at: string;
+};
+
+export type ReportDeletionRequestStatus =
+  | "pending"
+  | "approved"
+  | "dismissed";
+
+export type ReportDeletionRequest = {
+  id: string;
+  damage_report_id: string;
+  requested_by: string;
+  message: string | null;
+  status: ReportDeletionRequestStatus;
+  reviewed_by: string | null;
+  reviewed_at: string | null;
   created_at: string;
 };
 

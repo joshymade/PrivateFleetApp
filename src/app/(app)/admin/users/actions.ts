@@ -5,7 +5,11 @@ import { redirect } from "next/navigation";
 import { canAccessAdminUsers, getSessionProfile } from "@/lib/auth/profile";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
-import type { ContactRequestCategory, UserRole } from "@/types/database";
+import {
+  ANONYMOUS_DRIVER_PROFILE_ID,
+  type ContactRequestCategory,
+  type UserRole,
+} from "@/types/database";
 
 export type AdminActionResult =
   | { ok: true; message?: string }
@@ -116,6 +120,9 @@ export async function resetUserReports(
 ): Promise<AdminActionResult> {
   const { session, error } = await requireAdmin();
   if (!session) return { ok: false, error: error ?? "Admin access required." };
+  if (userId === ANONYMOUS_DRIVER_PROFILE_ID) {
+    return { ok: false, error: "Cannot reset the system Anonymous Driver." };
+  }
 
   const { admin, error: adminError } = adminClientOrError();
   if (!admin) return { ok: false, error: adminError };
@@ -171,6 +178,9 @@ export async function deleteUserAccount(
   if (!session) return { ok: false, error: error ?? "Admin access required." };
   if (userId === session.userId) {
     return { ok: false, error: "You cannot delete your own account." };
+  }
+  if (userId === ANONYMOUS_DRIVER_PROFILE_ID) {
+    return { ok: false, error: "Cannot delete the system Anonymous Driver." };
   }
 
   const { admin, error: adminError } = adminClientOrError();
