@@ -35,6 +35,11 @@ export type Profile = {
    */
   current_truck_number: string | null;
   role: UserRole;
+  /**
+   * When set, the account is locked out (middleware + login reject).
+   * Cleared to re-enable.
+   */
+  disabled_at: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -56,10 +61,12 @@ export type Load = {
   starting_mileage: number | null;
   /** Odometer at load complete. */
   ending_mileage: number | null;
-  /** Dollar amount the load paid (set on/after complete). */
+  /** Dollar amount the load paid (set on/after complete; optional). */
   pay_amount: number | null;
   assigned_driver_id: string | null;
   status: "active" | "pending" | "completed" | "cancelled" | "archived";
+  /** When status became completed (pay edit lock window). */
+  completed_at: string | null;
   /** When archived (closed out; excluded from stats). */
   archived_at: string | null;
   created_at: string;
@@ -88,6 +95,16 @@ export type ContactRequest = {
   category: ContactRequestCategory;
   message: string;
   created_at: string;
+};
+
+/** Admin reply to a contact_request; drivers see these on Contact › Inbox. */
+export type ContactReply = {
+  id: string;
+  contact_request_id: string;
+  admin_id: string;
+  body: string;
+  created_at: string;
+  read_at: string | null;
 };
 
 export type LoadStopType = "store" | "vendor" | "dc";

@@ -314,6 +314,26 @@ Digit-normalized trailer/tractor search opens a dedicated unit history page (Fee
 3. [x] Clickable unit number on `FeedReportCard` and report detail → unit page.
 4. [x] Legacy `/feed?q=` with digits redirects to the unit page.
 
+### Feature 13: Optional pay on complete + 20-day edit lock — suggested 2026-07-23
+
+Pay amount is optional when completing a load (can be filled in later). After completion, pay remains editable for 20 days via `loads.completed_at`, then locks (UI hides edit; server rejects). Null pay counts as 0 in earnings sums.
+
+1. [x] Migration `032`: `loads.completed_at`; backfill completed rows; apply on Cloud; update `database.ts`.
+2. [x] `completeLoad` + CompleteLoadButton: pay optional; set `completed_at` on complete.
+3. [x] `updateLoadPayAmount` + EditPayAmount + load detail: allow edit only when completed and within 20 days; reject/lock after.
+4. [x] Verify tsc + eslint on touched files.
+
+### Feature 14: Admin Users hub — suggested 2026-07-23
+
+Admin bottom-nav **Users** tab with list/detail, contact reply messaging, disable/delete, and reset reports/loads (service-role server actions).
+
+1. [x] Migration `031`: `profiles.disabled_at`, `contact_replies` (+ RLS), admin SELECT on loads; apply on Cloud; update `database.ts`.
+2. [x] `src/lib/supabase/admin.ts` service-role client; admin list/detail queries (last active = Auth `last_sign_in_at`, fallback `profiles.updated_at`).
+3. [x] Bottom nav Users tab; `/admin/users` list (name, driver id, email, created, report/load counts, last active); `/admin/users/[id]` detail.
+4. [x] Contact thread + admin reply → driver Contact tabs Compose | Inbox (`contact_replies`, mark read).
+5. [x] Disable / re-enable (`disabled_at` + Auth ban); middleware + login lockout; delete account; reset reports; reset loads (confirmations).
+6. [x] Verify tsc + eslint on touched files.
+
 ---
 
 ## Quick reference — env (no secrets here)

@@ -1,10 +1,10 @@
 import { redirect } from "next/navigation";
-import { UsersRoleManager } from "@/components/admin/users-role-manager";
-import { BackLink } from "@/components/nav/back-link";
+import { AdminUsersList } from "@/components/admin/admin-users-list";
 import { pageTitleClassName } from "@/components/ui/page-title";
 import { canAccessAdminUsers, getSessionProfile } from "@/lib/auth/profile";
-import { createClient } from "@/lib/supabase/server";
-import type { Profile } from "@/types/database";
+import { listAdminUsers } from "@/lib/admin/users";
+
+export const metadata = { title: "Users" };
 
 export default async function AdminUsersPage() {
   const session = await getSessionProfile();
@@ -12,34 +12,28 @@ export default async function AdminUsersPage() {
     redirect("/account");
   }
 
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("profiles")
-    .select("id, driver_id, email, full_name, role, created_at, updated_at")
-    .order("created_at", { ascending: true });
-
-  const users = (data ?? []) as Profile[];
+  const { users, error } = await listAdminUsers();
 
   return (
-    <main className="flex flex-col gap-4 p-6">
+    <main className="flex flex-col gap-4 p-4 pb-8 pt-2">
       <div>
-        <BackLink href="/account" aria-label="Back to Account">
-          Account
-        </BackLink>
-        <h1 className={`mt-2 ${pageTitleClassName}`}>Manage users</h1>
-        <p className="mt-2 text-sm text-muted-foreground">
-          Set role to driver, safety, or admin. Roles live on{" "}
-          <code className="text-xs">public.profiles.role</code> (not Auth
-          Users).
+        <h1 className={pageTitleClassName}>Users</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Fleet accounts, activity, and management. Tap a user for messages and
+          actions.
+        </p>
+        <p className="mt-1 text-[11px] text-muted-foreground">
+          Last active prefers Auth last sign-in; falls back to profile updated
+          time when unavailable.
         </p>
       </div>
 
       {error ? (
-        <p className="text-sm text-red-600" role="alert">
-          {error.message}
+        <p className="text-sm text-destructive" role="alert">
+          {error}
         </p>
       ) : (
-        <UsersRoleManager users={users} currentUserId={session.userId} />
+        <AdminUsersList users={users} />
       )}
     </main>
   );

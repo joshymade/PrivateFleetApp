@@ -7,9 +7,12 @@ import { updateLoadPayAmount } from "@/lib/loads/actions";
 export function EditPayAmount({
   loadId,
   currentAmount,
+  canEdit,
 }: {
   loadId: string;
   currentAmount: number | null;
+  /** False when the 20-day post-completion edit window has closed. */
+  canEdit: boolean;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -19,12 +22,21 @@ export function EditPayAmount({
   );
   const [error, setError] = useState<string | null>(null);
 
+  if (!canEdit) {
+    return null;
+  }
+
   function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (pending) return;
     setError(null);
+    const pay = Number(value);
+    if (!Number.isFinite(pay) || pay < 0) {
+      setError("Enter a valid pay amount.");
+      return;
+    }
     startTransition(async () => {
-      const result = await updateLoadPayAmount(loadId, Number(value));
+      const result = await updateLoadPayAmount(loadId, pay);
       if (result.error) {
         setError(result.error);
         return;

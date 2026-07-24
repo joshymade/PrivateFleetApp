@@ -125,15 +125,24 @@ export async function updateSession(request: NextRequest) {
   if (user) {
     const { data: profileRow } = await supabase
       .from("profiles")
-      .select("role, full_name, work_state")
+      .select("role, full_name, work_state, disabled_at")
       .eq("id", user.id)
       .maybeSingle();
 
     const profile = profileRow as ProfileCompletenessFields & {
       role?: UserRole | null;
+      disabled_at?: string | null;
     } | null;
     const role: UserRole = profile?.role ?? "driver";
     const needsSetup = driverNeedsProfileSetup(role, profile);
+
+    // Disabled accounts cannot use the app. Sign out; show message on login.
+    if (profile?.disabled_at) {
+      await supabase.auth.signOut();
+      return redirectWithSession(request, supabaseResponse, "/login", {
+        error: "disabled",
+      });
+    }
 
     // Legacy /profile → /account (preserve setup query).
     if (pathname === "/profile" || pathname.startsWith("/profile/")) {

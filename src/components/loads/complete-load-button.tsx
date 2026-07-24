@@ -32,7 +32,8 @@ export function CompleteLoadButton({
     setError(null);
     const endRaw = endingMileage.trim();
     const end = endRaw ? Number(endRaw) : null;
-    const pay = Number(payAmount);
+    const payRaw = payAmount.trim();
+    let pay: number | null = null;
     if (endingRequired && (end == null || !Number.isFinite(end))) {
       setError("Ending mileage is required.");
       return;
@@ -45,9 +46,12 @@ export function CompleteLoadButton({
       setError("Ending mileage must be greater than or equal to starting mileage.");
       return;
     }
-    if (!Number.isFinite(pay) || pay < 0) {
-      setError("Pay amount is required.");
-      return;
+    if (payRaw) {
+      pay = Number(payRaw);
+      if (!Number.isFinite(pay) || pay < 0) {
+        setError("Enter a valid pay amount.");
+        return;
+      }
     }
     startTransition(async () => {
       const result = await completeLoad(loadId, {
@@ -107,8 +111,8 @@ export function CompleteLoadButton({
             : "text-xs text-muted-foreground"
         }
       >
-        Enter ending mileage and pay amount. All stops will be checked and the
-        current trailer cleared.
+        Enter ending mileage. Pay amount is optional and can be added later.
+        All stops will be checked and the current trailer cleared.
         {startingMileage != null
           ? ` Starting mileage: ${startingMileage}.`
           : ""}
@@ -157,7 +161,6 @@ export function CompleteLoadButton({
           Pay amount ($)
         </span>
         <input
-          required
           inputMode="decimal"
           value={payAmount}
           onChange={(e) => setPayAmount(e.target.value)}
@@ -167,6 +170,15 @@ export function CompleteLoadButton({
               : "min-h-11 w-full rounded-xl border border-border bg-background px-3 text-base"
           }
         />
+        <span
+          className={
+            isHome
+              ? "mt-1 block text-xs text-blue-700/70 dark:text-blue-200/65"
+              : "mt-1 block text-xs text-muted-foreground"
+          }
+        >
+          Optional — you can add or edit pay for 20 days after completion
+        </span>
       </label>
       {error ? (
         <p

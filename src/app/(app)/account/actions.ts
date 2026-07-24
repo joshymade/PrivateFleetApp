@@ -493,3 +493,21 @@ export async function submitContactRequest(input: {
   if (!sent.ok) return sent;
   return { ok: true };
 }
+
+export async function markContactRepliesRead(
+  replyIds: string[],
+): Promise<ActionResult> {
+  const { supabase, user, error } = await requireUser();
+  if (!user) return { ok: false, error: error ?? "Sign in required." };
+  if (replyIds.length === 0) return { ok: true };
+
+  const now = new Date().toISOString();
+  const { error: updateError } = await supabase
+    .from("contact_replies")
+    .update({ read_at: now })
+    .in("id", replyIds)
+    .is("read_at", null);
+
+  if (updateError) return { ok: false, error: updateError.message };
+  return { ok: true };
+}

@@ -177,6 +177,27 @@ export function drivenMiles(
   return Number.isFinite(value) ? value : null;
 }
 
+/** Days after completion during which pay_amount may still be edited. */
+export const PAY_AMOUNT_EDIT_DAYS = 20;
+
+/**
+ * Pay amount is editable when the load was completed within the last
+ * {@link PAY_AMOUNT_EDIT_DAYS} days. Falls back to `updatedAt` when
+ * `completedAt` is missing (legacy rows before the column existed).
+ */
+export function isPayAmountEditable(
+  completedAt: string | null | undefined,
+  updatedAt?: string | null,
+  now = new Date(),
+): boolean {
+  const stamp = completedAt ?? updatedAt ?? null;
+  if (!stamp) return false;
+  const completed = new Date(stamp);
+  if (Number.isNaN(completed.getTime())) return false;
+  const windowMs = PAY_AMOUNT_EDIT_DAYS * 24 * 60 * 60 * 1000;
+  return now.getTime() - completed.getTime() <= windowMs;
+}
+
 export const WEEKDAY_LABELS = [
   "Sunday",
   "Monday",

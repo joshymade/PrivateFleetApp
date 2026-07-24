@@ -8,11 +8,19 @@ import { driverNeedsProfileSetup } from "@/lib/auth/profile-complete";
 import { createClient } from "@/lib/supabase/client";
 import type { UserRole } from "@/types/database";
 
-export function LoginForm() {
+export function LoginForm({
+  initialError,
+}: {
+  initialError?: string | null;
+}) {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(
+    initialError === "disabled"
+      ? "This account has been disabled. Contact Admin if you need access restored."
+      : null,
+  );
   const [pending, setPending] = useState(false);
 
   async function onSubmit(e: React.FormEvent) {
@@ -28,7 +36,14 @@ export function LoginForm() {
 
     if (signInError) {
       setPending(false);
-      setError(signInError.message);
+      const msg = signInError.message.toLowerCase();
+      if (msg.includes("banned") || msg.includes("disabled")) {
+        setError(
+          "This account has been disabled. Contact Admin if you need access restored.",
+        );
+      } else {
+        setError(signInError.message);
+      }
       return;
     }
 
@@ -42,9 +57,18 @@ export function LoginForm() {
 
     const { data: profile } = await supabase
       .from("profiles")
-      .select("role, full_name, work_state")
+      .select("role, full_name, work_state, disabled_at")
       .eq("id", userId)
       .maybeSingle();
+
+    if (profile?.disabled_at) {
+      await supabase.auth.signOut();
+      setPending(false);
+      setError(
+        "This account has been disabled. Contact Admin if you need access restored.",
+      );
+      return;
+    }
 
     const role = (profile?.role as UserRole | undefined) ?? "driver";
     const needsSetup = driverNeedsProfileSetup(role, profile);

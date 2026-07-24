@@ -5,6 +5,7 @@ import {
   Home,
   Newspaper,
   UserRound,
+  Users,
   type LucideProps,
 } from "lucide-react";
 import Link from "next/link";
@@ -89,6 +90,15 @@ function buildNavItems(
     });
   }
 
+  if (role === "admin") {
+    items.push({
+      href: "/admin/users",
+      label: "Users",
+      icon: Users,
+      match: (p) => p === "/admin/users" || p.startsWith("/admin/users/"),
+    });
+  }
+
   items.push({
     href: "/account",
     label: "Account",
@@ -98,7 +108,7 @@ function buildNavItems(
       p.startsWith("/account/") ||
       p === "/profile" ||
       p.startsWith("/profile/") ||
-      p.startsWith("/admin/") ||
+      (role !== "admin" && p.startsWith("/admin/")) ||
       (role !== "safety" && p.startsWith("/safety/")),
   });
 

@@ -9,7 +9,7 @@ import { StopTrailerField } from "@/components/loads/stop-trailer-field";
 import { BackLink } from "@/components/nav/back-link";
 import { DriverId, driverIdClassName } from "@/components/ui/driver-id";
 import { pageTitleClassName } from "@/components/ui/page-title";
-import { drivenMiles, formatLongDate } from "@/lib/loads/date";
+import { drivenMiles, formatLongDate, isPayAmountEditable } from "@/lib/loads/date";
 import {
   formatTrailerSequence,
   statusBadgeClassName,
@@ -102,13 +102,16 @@ export default async function LoadDetailPage({
                 ? `$${Number(load.pay_amount).toFixed(2)}`
                 : "—"}
             </dd>
-            {canManage && load.status === "completed" ? (
+            {canManage &&
+            load.status === "completed" &&
+            isPayAmountEditable(load.completed_at, load.updated_at) ? (
               <dd className="mt-1">
                 <EditPayAmount
                   loadId={load.id}
                   currentAmount={
                     load.pay_amount != null ? Number(load.pay_amount) : null
                   }
+                  canEdit
                 />
               </dd>
             ) : null}

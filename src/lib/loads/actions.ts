@@ -9,7 +9,9 @@ import {
 import { createClient } from "@/lib/supabase/server";
 import {
   isEndingMileageRequired,
+  isPayAmountEditable,
   isStartingMileageRequired,
+  PAY_AMOUNT_EDIT_DAYS,
   todayDateString,
 } from "@/lib/loads/date";
 import type { LoadStopType, UserRole } from "@/types/database";
@@ -504,13 +506,13 @@ export async function updateStopTrailerNumber(
 }
 
 /**
- * Mark load complete: require pay amount; ending mileage when starting was set
+ * Mark load complete: pay amount optional; ending mileage when starting was set
  * or load_date is today. Check all stops, clear current trailer, set status
- * completed, then auto-activate oldest pending.
+ * completed + completed_at, then auto-activate oldest pending.
  */
 export async function completeLoad(
   loadId: string,
-  input?: { endingMileage?: number | null; payAmount?: number },
+  input?: { endingMileage?: number | null; payAmount?: number | null },
 ): Promise<LoadActionState> {
   const { supabase, error, user } = await requireWriter();
   if (error || !user) return { error: error ?? "Sign in to manage loads." };
@@ -523,10 +525,14 @@ export async function completeLoad(
     endingRaw != null && Number.isFinite(Number(endingRaw))
       ? Number(endingRaw)
       : null;
-  const payAmount = Number(input?.payAmount);
 
-  if (!Number.isFinite(payAmount) || payAmount < 0) {
-    return { error: "Pay amount is required." };
+  let payAmount: number | null = null;
+  if (input?.payAmount != null) {
+    const pay = Number(input.payAmount);
+    if (!Number.isFinite(pay) || pay < 0) {
+      return { error: "Enter a valid pay amount." };
+    }
+    payAmount = pay;
   }
 
   const { data: load, error: loadError } = await supabase
@@ -577,14 +583,25 @@ export async function completeLoad(
 
   if (stopsError) return { error: stopsError.message };
 
+  const patch: {
+    status: "completed";
+    trailer_number: null;
+    ending_mileage: number | null;
+    completed_at: string;
+    pay_amount?: number;
+  } = {
+    status: "completed",
+    trailer_number: null,
+    ending_mileage: endingMileage,
+    completed_at: departedAt,
+  };
+  if (payAmount != null) {
+    patch.pay_amount = payAmount;
+  }
+
   const { error: updateError } = await supabase
     .from("loads")
-    .update({
-      status: "completed",
-      trailer_number: null,
-      ending_mileage: endingMileage,
-      pay_amount: payAmount,
-    })
+    .update(patch)
     .eq("id", id)
     .eq("assigned_driver_id", user.id);
 
@@ -745,7 +762,7 @@ export async function deleteLoad(loadId: string): Promise<LoadActionState> {
   redirect("/loads");
 }
 
-/** Update pay amount on a completed load. */
+/** Update pay amount on a completed load (editable for 20 days after completion). */
 export async function updateLoadPayAmount(
   loadId: string,
   payAmount: number,
@@ -757,16 +774,38 @@ export async function updateLoadPayAmount(
     return { error: "Enter a valid pay amount." };
   }
 
+  const id = loadId.trim();
+  if (!id) return { error: "Missing load." };
+
+  const { data: load, error: loadError } = await supabase
+    .from("loads")
+    .select("id, status, completed_at, updated_at")
+    .eq("id", id)
+    .eq("assigned_driver_id", user.id)
+    .maybeSingle();
+
+  if (loadError || !load) {
+    return { error: loadError?.message ?? "Load not found." };
+  }
+  if (load.status !== "completed") {
+    return { error: "Pay amount can only be edited on completed loads." };
+  }
+  if (!isPayAmountEditable(load.completed_at, load.updated_at)) {
+    return {
+      error: `Pay amount is locked after ${PAY_AMOUNT_EDIT_DAYS} days from completion.`,
+    };
+  }
+
   const { error: updateError } = await supabase
     .from("loads")
     .update({ pay_amount: payAmount })
-    .eq("id", loadId)
+    .eq("id", id)
     .eq("assigned_driver_id", user.id);
 
   if (updateError) return { error: updateError.message };
 
   revalidatePath("/home");
   revalidatePath("/loads");
-  revalidatePath(`/loads/${loadId}`);
+  revalidatePath(`/loads/${id}`);
   return { success: "Pay amount updated." };
 }
