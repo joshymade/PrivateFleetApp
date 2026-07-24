@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { AdminCreateUserForm } from "@/components/admin/admin-create-user-form";
 import { AdminUsersList } from "@/components/admin/admin-users-list";
 import { pageTitleClassName } from "@/components/ui/page-title";
 import { canAccessAdminUsers, getSessionProfile } from "@/lib/auth/profile";
@@ -27,6 +28,8 @@ export default async function AdminUsersPage() {
           time when unavailable.
         </p>
       </div>
+
+      <AdminCreateUserForm />
 
       {error ? (
         <p className="text-sm text-destructive" role="alert">

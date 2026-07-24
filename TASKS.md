@@ -344,6 +344,16 @@ Account reset controls, Anonymous Driver system profile, report untag, and admin
 4. [x] Notifications for admin (new request) and driver (approved / dismissed); Account link to deletion inbox.
 5. [x] Verify tsc + eslint on touched files.
 
+### Feature 16: Admin create user + force password change — suggested 2026-07-23
+
+Admin creates users with temp password; force change on login; role set to driver|safety only.
+
+1. [x] Migration `034`: `profiles.must_change_password`; apply on Cloud; update `database.ts`.
+2. [x] `createUser` service-role action; Create user form on `/admin/users`; role driver|safety on create.
+3. [x] Middleware + login gate → `/account/change-password`; clear flag after `updateUser` password change.
+4. [x] User detail: Driver/Safety select + Save role (no admin promotion from UI).
+5. [x] Verify tsc + eslint on touched files.
+
 ---
 
 ## Quick reference — env (no secrets here)

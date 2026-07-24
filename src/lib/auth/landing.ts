@@ -1,5 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { PROFILE_SETUP_PATH } from "@/lib/auth/profile-complete";
+import {
+  FORCE_CHANGE_PASSWORD_PATH,
+  PROFILE_SETUP_PATH,
+} from "@/lib/auth/profile-complete";
 
 export function activeLoadEditPath(loadId: string): string {
   return `/loads/${loadId}/edit`;
@@ -14,9 +17,16 @@ export type PostAuthLanding = {
 
 /** Resolve post-login / app-open destination from known active-load id. */
 export function resolvePostAuthLanding(opts: {
+  mustChangePassword?: boolean;
   needsSetup: boolean;
   activeLoadId: string | null;
 }): PostAuthLanding {
+  if (opts.mustChangePassword) {
+    return {
+      href: FORCE_CHANGE_PASSWORD_PATH,
+      pathname: FORCE_CHANGE_PASSWORD_PATH,
+    };
+  }
   if (opts.needsSetup) {
     return {
       href: PROFILE_SETUP_PATH,
@@ -53,8 +63,19 @@ export async function fetchActiveLoadId(
  */
 export async function getPostAuthLandingPath(
   supabase: SupabaseClient,
-  opts: { userId: string; needsSetup: boolean },
+  opts: {
+    userId: string;
+    needsSetup: boolean;
+    mustChangePassword?: boolean;
+  },
 ): Promise<PostAuthLanding> {
+  if (opts.mustChangePassword) {
+    return resolvePostAuthLanding({
+      mustChangePassword: true,
+      needsSetup: false,
+      activeLoadId: null,
+    });
+  }
   if (opts.needsSetup) {
     return resolvePostAuthLanding({ needsSetup: true, activeLoadId: null });
   }

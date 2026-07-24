@@ -57,7 +57,7 @@ export function LoginForm({
 
     const { data: profile } = await supabase
       .from("profiles")
-      .select("role, full_name, work_state, disabled_at")
+      .select("role, full_name, work_state, disabled_at, must_change_password")
       .eq("id", userId)
       .maybeSingle();
 
@@ -75,6 +75,7 @@ export function LoginForm({
     const landing = await getPostAuthLandingPath(supabase, {
       userId,
       needsSetup,
+      mustChangePassword: Boolean(profile?.must_change_password),
     });
 
     setPending(false);

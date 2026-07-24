@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import {
   deleteUserAccount,
   replyToContactRequest,
@@ -14,7 +14,7 @@ import { DriverId } from "@/components/ui/driver-id";
 import type { AdminUserDetail } from "@/lib/admin/users";
 import type { ContactRequestCategory, UserRole } from "@/types/database";
 
-const ROLES: UserRole[] = ["driver", "safety", "admin"];
+const ASSIGNABLE_ROLES: Array<"driver" | "safety"> = ["driver", "safety"];
 
 const CATEGORY_LABELS: Record<ContactRequestCategory, string> = {
   identity: "Driver info",
@@ -71,6 +71,11 @@ function buildThread(user: AdminUserDetail): ThreadItem[] {
   return items;
 }
 
+function initialRoleDraft(role: UserRole): "driver" | "safety" | "" {
+  if (role === "driver" || role === "safety") return role;
+  return "";
+}
+
 export function AdminUserDetailPanel({
   user,
   currentUserId,
@@ -83,13 +88,22 @@ export function AdminUserDetailPanel({
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [replyBody, setReplyBody] = useState("");
+  const [roleDraft, setRoleDraft] = useState<"driver" | "safety" | "">(
+    initialRoleDraft(user.role),
+  );
   const [confirm, setConfirm] = useState<
     null | "disable" | "enable" | "reset_reports" | "reset_loads" | "delete"
   >(null);
 
+  useEffect(() => {
+    setRoleDraft(initialRoleDraft(user.role));
+  }, [user.id, user.role]);
+
   const isSelf = user.id === currentUserId;
   const latestRequest = user.contact_requests[user.contact_requests.length - 1];
   const thread = buildThread(user);
+  const canSaveRole =
+    Boolean(roleDraft) && roleDraft !== user.role && !pending;
 
   function run(
     action: () => Promise<{ ok: boolean; error?: string; message?: string }>,
@@ -166,24 +180,55 @@ export function AdminUserDetailPanel({
           </div>
         </dl>
 
-        <label className="mt-2 flex items-center gap-2 text-sm">
-          <span className="text-muted-foreground">Role</span>
-          <select
-            className="flex-1 rounded-md border border-border bg-background px-2 py-2 text-sm capitalize text-foreground focus:border-ring focus:ring-2 focus:ring-ring/30"
-            value={user.role}
-            disabled={pending}
-            aria-label="Change role"
-            onChange={(e) =>
-              run(() => updateUserRole(user.id, e.target.value as UserRole), false)
-            }
+        {user.role === "admin" ? (
+          <p className="mt-2 text-xs text-muted-foreground" role="status">
+            Current role: <span className="font-medium">admin</span>. Select
+            driver or safety to demote; promoting to admin is not available
+            here.
+          </p>
+        ) : null}
+
+        <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-end">
+          <label className="flex flex-1 flex-col gap-1 text-sm">
+            <span className="text-muted-foreground">Role</span>
+            <select
+              className="w-full rounded-md border border-border bg-background px-2 py-2 text-sm capitalize text-foreground focus:border-ring focus:ring-2 focus:ring-ring/30"
+              value={roleDraft}
+              disabled={pending}
+              aria-label="Change role"
+              onChange={(e) => {
+                const value = e.target.value;
+                setRoleDraft(
+                  value === "safety"
+                    ? "safety"
+                    : value === "driver"
+                      ? "driver"
+                      : "",
+                );
+              }}
+            >
+              {user.role === "admin" ? (
+                <option value="">Select role…</option>
+              ) : null}
+              {ASSIGNABLE_ROLES.map((r) => (
+                <option key={r} value={r}>
+                  {r}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button
+            type="button"
+            disabled={!canSaveRole}
+            onClick={() => {
+              if (roleDraft !== "driver" && roleDraft !== "safety") return;
+              run(() => updateUserRole(user.id, roleDraft), false);
+            }}
+            className="min-h-11 shrink-0 rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground disabled:opacity-50"
           >
-            {ROLES.map((r) => (
-              <option key={r} value={r}>
-                {r}
-              </option>
-            ))}
-          </select>
-        </label>
+            {pending ? "Saving…" : "Save role"}
+          </button>
+        </div>
       </section>
 
       <section className="space-y-3">

@@ -212,9 +212,16 @@ export async function updateUserRole(
   const { session, error } = await requireAdmin();
   if (!session) return { ok: false, error: error ?? "Admin access required." };
 
+  if (role !== "driver" && role !== "safety") {
+    return {
+      ok: false,
+      error: "Role must be driver or safety. Admin promotion is not available here.",
+    };
+  }
+
   const supabase = await createClient();
   const patch: { role: UserRole; driver_id?: null } = { role };
-  if (role === "safety" || role === "admin") {
+  if (role === "safety") {
     patch.driver_id = null;
   }
 
@@ -233,6 +240,124 @@ export async function updateUserRole(
   revalidatePath("/admin/users");
   revalidatePath(`/admin/users/${userId}`);
   return { ok: true, message: `Role set to ${role}.` };
+}
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+/** Matches signup/login HTML minLength and Supabase default minimum. */
+const MIN_PASSWORD_LENGTH = 6;
+
+export type CreateUserInput = {
+  email: string;
+  temporaryPassword: string;
+  role: "driver" | "safety";
+};
+
+/**
+ * Creates an Auth user (confirmed) with a temporary password and forces a
+ * password change on first login via profiles.must_change_password.
+ */
+export async function createUser(
+  input: CreateUserInput,
+): Promise<AdminActionResult & { userId?: string }> {
+  const { session, error } = await requireAdmin();
+  if (!session) return { ok: false, error: error ?? "Admin access required." };
+
+  const email = input.email.trim().toLowerCase();
+  const temporaryPassword = input.temporaryPassword;
+  const role = input.role;
+
+  if (!EMAIL_RE.test(email)) {
+    return { ok: false, error: "Enter a valid email address." };
+  }
+  if (temporaryPassword.length < MIN_PASSWORD_LENGTH) {
+    return {
+      ok: false,
+      error: `Temporary password must be at least ${MIN_PASSWORD_LENGTH} characters.`,
+    };
+  }
+  if (role !== "driver" && role !== "safety") {
+    return { ok: false, error: "Role must be driver or safety." };
+  }
+
+  const { admin, error: adminError } = adminClientOrError();
+  if (!admin) return { ok: false, error: adminError };
+
+  const { data: created, error: createError } =
+    await admin.auth.admin.createUser({
+      email,
+      password: temporaryPassword,
+      email_confirm: true,
+      user_metadata: {
+        must_change_password: true,
+      },
+    });
+
+  if (createError) {
+    const msg = createError.message.toLowerCase();
+    if (msg.includes("already") || msg.includes("registered")) {
+      return { ok: false, error: "A user with that email already exists." };
+    }
+    return { ok: false, error: createError.message };
+  }
+
+  const userId = created.user?.id;
+  if (!userId) {
+    return { ok: false, error: "User was created but no id was returned." };
+  }
+
+  // handle_new_user inserts the profile; wait briefly if needed then set flags.
+  let profileReady = false;
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const { data: existing } = await admin
+      .from("profiles")
+      .select("id")
+      .eq("id", userId)
+      .maybeSingle();
+    if (existing?.id) {
+      profileReady = true;
+      break;
+    }
+    await new Promise((r) => setTimeout(r, 150));
+  }
+
+  if (!profileReady) {
+    return {
+      ok: false,
+      error:
+        "Auth user created but profile is missing. Check signup trigger, then retry role/password flags.",
+    };
+  }
+
+  const profilePatch: {
+    must_change_password: boolean;
+    role: "driver" | "safety";
+    driver_id?: null;
+  } = {
+    must_change_password: true,
+    role,
+  };
+  if (role === "safety") {
+    profilePatch.driver_id = null;
+  }
+
+  const { error: profileError } = await admin
+    .from("profiles")
+    .update(profilePatch)
+    .eq("id", userId);
+
+  if (profileError) {
+    return {
+      ok: false,
+      error: `User created, but profile update failed: ${profileError.message}`,
+    };
+  }
+
+  revalidatePath("/admin/users");
+  return {
+    ok: true,
+    message: `Created ${role} account for ${email}. They must change password on login.`,
+    userId,
+  };
 }
 
 export function contactCategoryLabel(

@@ -41,6 +41,11 @@ export type Profile = {
    */
   disabled_at: string | null;
   /**
+   * When true, middleware gates the user to /account/change-password
+   * until they set a new password (admin-created accounts).
+   */
+  must_change_password: boolean;
+  /**
    * Dedicated system Anonymous Driver profile used when a driver untags a report.
    */
   is_system_anonymous: boolean;

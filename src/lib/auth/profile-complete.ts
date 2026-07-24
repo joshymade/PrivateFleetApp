@@ -32,5 +32,8 @@ export function driverNeedsProfileSetup(
 
 export const PROFILE_SETUP_PATH = "/account?setup=1";
 
+/** Admin-created accounts must set a new password before using the app. */
+export const FORCE_CHANGE_PASSWORD_PATH = "/account/change-password";
+
 export const PROFILE_INCOMPLETE_MESSAGE =
   "Complete your profile (first name and work state) before continuing.";

@@ -580,3 +580,65 @@ export async function anonymizeOwnDamageReports(): Promise<
     anonymized: typeof data === "number" ? data : Number(data ?? 0),
   };
 }
+
+const MIN_PASSWORD_LENGTH = 6;
+
+/**
+ * Sets a new password and clears profiles.must_change_password.
+ * Used by the forced change-password gate for admin-created accounts.
+ */
+export async function changePasswordForced(input: {
+  password: string;
+  confirmPassword: string;
+}): Promise<ActionResult> {
+  const { supabase, user, error } = await requireUser();
+  if (!user) return { ok: false, error: error ?? "Sign in required." };
+
+  const password = input.password;
+  const confirmPassword = input.confirmPassword;
+
+  if (password.length < MIN_PASSWORD_LENGTH) {
+    return {
+      ok: false,
+      error: `Password must be at least ${MIN_PASSWORD_LENGTH} characters.`,
+    };
+  }
+  if (password !== confirmPassword) {
+    return { ok: false, error: "Passwords do not match." };
+  }
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("must_change_password")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  if (!profile?.must_change_password) {
+    return { ok: false, error: "Password change is not required." };
+  }
+
+  const { error: authError } = await supabase.auth.updateUser({ password });
+  if (authError) return { ok: false, error: authError.message };
+
+  const { error: profileError } = await supabase
+    .from("profiles")
+    .update({ must_change_password: false })
+    .eq("id", user.id);
+
+  if (profileError) {
+    return {
+      ok: false,
+      error: `Password updated, but could not clear the change flag: ${profileError.message}`,
+    };
+  }
+
+  // Best-effort: clear user_metadata flag if present.
+  await supabase.auth.updateUser({
+    data: { must_change_password: false },
+  });
+
+  revalidateAccountSurfaces();
+  revalidatePath("/account/change-password");
+  redirect("/home");
+}
+

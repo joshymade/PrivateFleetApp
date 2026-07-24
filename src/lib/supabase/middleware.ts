@@ -3,6 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { getPostAuthLandingPath } from "@/lib/auth/landing";
 import {
   driverNeedsProfileSetup,
+  FORCE_CHANGE_PASSWORD_PATH,
   type ProfileCompletenessFields,
 } from "@/lib/auth/profile-complete";
 import { getPublicSupabaseEnv } from "@/lib/supabase/env";
@@ -49,6 +50,10 @@ function isAccountPath(pathname: string): boolean {
     pathname === "/profile" ||
     pathname.startsWith("/profile/")
   );
+}
+
+function isForceChangePasswordPath(pathname: string): boolean {
+  return pathname === FORCE_CHANGE_PASSWORD_PATH;
 }
 
 function copyCookies(from: NextResponse, to: NextResponse) {
@@ -125,16 +130,18 @@ export async function updateSession(request: NextRequest) {
   if (user) {
     const { data: profileRow } = await supabase
       .from("profiles")
-      .select("role, full_name, work_state, disabled_at")
+      .select("role, full_name, work_state, disabled_at, must_change_password")
       .eq("id", user.id)
       .maybeSingle();
 
     const profile = profileRow as ProfileCompletenessFields & {
       role?: UserRole | null;
       disabled_at?: string | null;
+      must_change_password?: boolean | null;
     } | null;
     const role: UserRole = profile?.role ?? "driver";
     const needsSetup = driverNeedsProfileSetup(role, profile);
+    const mustChangePassword = Boolean(profile?.must_change_password);
 
     // Disabled accounts cannot use the app. Sign out; show message on login.
     if (profile?.disabled_at) {
@@ -163,12 +170,26 @@ export async function updateSession(request: NextRequest) {
       const landing = await getPostAuthLandingPath(supabase, {
         userId: user.id,
         needsSetup,
+        mustChangePassword,
       });
       return redirectWithSession(
         request,
         supabaseResponse,
         landing.pathname,
         landing.search,
+      );
+    }
+
+    // Admin-created accounts must change temp password before anything else.
+    if (
+      mustChangePassword &&
+      isAppPath(pathname) &&
+      !isForceChangePasswordPath(pathname)
+    ) {
+      return redirectWithSession(
+        request,
+        supabaseResponse,
+        FORCE_CHANGE_PASSWORD_PATH,
       );
     }
 
