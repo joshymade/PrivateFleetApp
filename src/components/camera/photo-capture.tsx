@@ -1,7 +1,15 @@
 "use client";
 
 import { Camera, ImageIcon, Info } from "lucide-react";
-import { useEffect, useId, useRef, useState, type ChangeEvent } from "react";
+import {
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type MouseEvent,
+} from "react";
 
 type PhotoCaptureProps = {
   /** Single-photo mode. Ignored when `multiple` is true. */
@@ -21,14 +29,14 @@ type PreviewItem = {
   url: string;
 };
 
-type PickerMode = "camera" | "library";
-
 /**
- * Mobile-friendly photo grid: empty slots open camera/library; filled slots show
- * thumbnails with remove. Slot count follows `maxFiles` when `multiple` is true.
+ * Mobile-friendly photo grid.
  *
- * "Open camera" uses a file input with `capture="environment"` so mobile Safari/
- * Chrome prefer the rear camera (or camera app) instead of the gallery.
+ * - "Open Camera" → hidden input with `capture="environment"` via `<label htmlFor>`
+ *   so iOS treats it as a direct user gesture (programmatic `.click()` often opens
+ *   the gallery and ignores `capture`).
+ * - Slot clicks / "Choose from library" → separate input without `capture` (gallery).
+ * Camera snaps fill the next empty slot; slot picks replace/fill that slot.
  */
 export function PhotoCapture({
   value = null,
@@ -40,29 +48,37 @@ export function PhotoCapture({
   maxFiles = 8,
 }: PhotoCaptureProps) {
   const tipId = useId();
-  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputId = useId();
+  const libraryInputId = useId();
   const libraryInputRef = useRef<HTMLInputElement>(null);
   const tipRootRef = useRef<HTMLSpanElement>(null);
   /** Slot index that triggered the file picker (replace filled, or append from empty). */
   const targetSlotRef = useRef<number | null>(null);
-  const [previews, setPreviews] = useState<PreviewItem[]>([]);
   const [tipOpen, setTipOpen] = useState(false);
 
   const slotCount = multiple ? maxFiles : 1;
   const files = multiple ? values : value ? [value] : [];
   const canAddMore = files.length < slotCount;
+  const filesIdentity = files
+    .map((f) => `${f.name}:${f.size}:${f.lastModified}`)
+    .join("|");
+
+  const previews = useMemo<PreviewItem[]>(
+    () =>
+      files.map((file, index) => ({
+        key: `${file.name}-${file.size}-${file.lastModified}-${index}`,
+        url: URL.createObjectURL(file),
+      })),
+    // Intentionally keyed by file identity, not `files` reference
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [filesIdentity],
+  );
 
   useEffect(() => {
-    const next = files.map((file, index) => ({
-      key: `${file.name}-${file.size}-${file.lastModified}-${index}`,
-      url: URL.createObjectURL(file),
-    }));
-    setPreviews(next);
     return () => {
-      next.forEach((p) => URL.revokeObjectURL(p.url));
+      previews.forEach((p) => URL.revokeObjectURL(p.url));
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- compare by file identity via length + names
-  }, [files.map((f) => `${f.name}:${f.size}:${f.lastModified}`).join("|")]);
+  }, [previews]);
 
   useEffect(() => {
     if (!tipOpen) return;
@@ -85,17 +101,25 @@ export function PhotoCapture({
     };
   }, [tipOpen]);
 
-  function openPicker(slotIndex: number, mode: PickerMode) {
+  /** Gallery only — never the camera input. */
+  function openLibraryPicker(slotIndex: number) {
     if (disabled) return;
     targetSlotRef.current = slotIndex;
-    const input =
-      mode === "camera" ? cameraInputRef.current : libraryInputRef.current;
-    input?.click();
+    libraryInputRef.current?.click();
   }
 
-  function openPrimaryPicker(mode: PickerMode) {
+  function openLibraryPrimary() {
     if (disabled || !canAddMore) return;
-    openPicker(files.length, mode);
+    openLibraryPicker(files.length);
+  }
+
+  function handleCameraLabelClick(event: MouseEvent<HTMLLabelElement>) {
+    if (disabled || !canAddMore) {
+      event.preventDefault();
+      return;
+    }
+    // Next empty slot — must run before the file dialog from the label→input gesture.
+    targetSlotRef.current = files.length;
   }
 
   function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
@@ -147,6 +171,8 @@ export function PhotoCapture({
       ? "grid grid-cols-1 gap-2 max-w-[11rem]"
       : "grid grid-cols-4 gap-2";
 
+  const cameraLabelDisabled = disabled || !canAddMore;
+
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-1">
@@ -192,19 +218,27 @@ export function PhotoCapture({
       </div>
 
       <div className="flex flex-col gap-2">
-        <button
-          type="button"
-          disabled={disabled || !canAddMore}
-          onClick={() => openPrimaryPicker("camera")}
-          className="flex w-full min-h-12 items-center justify-center gap-2 rounded-lg border border-border bg-card px-4 py-3 text-sm font-semibold text-foreground shadow-sm transition hover:border-brand/40 hover:bg-brand/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 disabled:opacity-50"
+        {/*
+          Label→input (not button + input.click()) so mobile Safari/Chrome honor
+          capture="environment" and open the camera instead of the photo library.
+        */}
+        <label
+          htmlFor={cameraLabelDisabled ? undefined : cameraInputId}
+          onClick={handleCameraLabelClick}
+          aria-disabled={cameraLabelDisabled}
+          className={`flex w-full min-h-12 cursor-pointer items-center justify-center gap-2 rounded-lg border border-border bg-card px-4 py-3 text-sm font-semibold text-foreground shadow-sm transition hover:border-brand/40 hover:bg-brand/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 ${
+            cameraLabelDisabled
+              ? "pointer-events-none cursor-not-allowed opacity-50"
+              : ""
+          }`}
         >
           <Camera aria-hidden className="size-5 shrink-0 text-brand" strokeWidth={2} />
           Open Camera & Snap Photo
-        </button>
+        </label>
         <button
           type="button"
           disabled={disabled || !canAddMore}
-          onClick={() => openPrimaryPicker("library")}
+          onClick={openLibraryPrimary}
           className="flex w-full min-h-11 items-center justify-center gap-2 rounded-lg border border-dashed border-border bg-transparent px-4 py-2.5 text-sm font-medium text-muted-foreground transition hover:border-brand/40 hover:bg-brand/5 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 disabled:opacity-50"
         >
           <ImageIcon aria-hidden className="size-4 shrink-0" strokeWidth={2} />
@@ -225,7 +259,7 @@ export function PhotoCapture({
                 <button
                   type="button"
                   disabled={disabled}
-                  onClick={() => openPicker(index, "camera")}
+                  onClick={() => openLibraryPicker(index)}
                   aria-label={`Replace photo ${index + 1} of ${slotCount}`}
                   className="relative aspect-square w-full overflow-hidden rounded-xl border border-border bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 disabled:opacity-50"
                 >
@@ -254,7 +288,7 @@ export function PhotoCapture({
               <button
                 type="button"
                 disabled={disabled}
-                onClick={() => openPicker(index, "camera")}
+                onClick={() => openLibraryPicker(index)}
                 aria-label={`Add photo ${index + 1} of ${slotCount}`}
                 className="flex aspect-square w-full items-center justify-center rounded-xl border border-dashed border-border bg-muted text-muted-foreground transition hover:border-foreground/30 hover:bg-muted/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 disabled:opacity-50"
               >
@@ -267,9 +301,9 @@ export function PhotoCapture({
         })}
       </ul>
 
-      {/* Camera: capture=environment prefers rear camera on mobile Safari/Chrome. */}
+      {/* Camera only — capture=environment; never triggered by slots/library UI. */}
       <input
-        ref={cameraInputRef}
+        id={cameraInputId}
         type="file"
         accept="image/*"
         capture="environment"
@@ -279,8 +313,9 @@ export function PhotoCapture({
         tabIndex={-1}
         aria-hidden
       />
-      {/* Library: no capture — opens gallery / file picker. */}
+      {/* Gallery only — no capture; slots + "Choose from library" only. */}
       <input
+        id={libraryInputId}
         ref={libraryInputRef}
         type="file"
         accept="image/*"
