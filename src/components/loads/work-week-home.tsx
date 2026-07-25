@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { CompleteLoadButton } from "@/components/loads/complete-load-button";
+import { DailyPayDayEditor } from "@/components/loads/daily-pay-day-editor";
 import { DepartStopButton } from "@/components/loads/depart-stop-button";
 import { StopTrailerField } from "@/components/loads/stop-trailer-field";
 import {
@@ -13,13 +14,15 @@ import {
   stopTypeLabel,
   stopTypeNameClass,
 } from "@/lib/loads/format";
-import type { AdpEntry, Load } from "@/types/database";
+import type { AdpEntry, DailyPayEntry, Load } from "@/types/database";
 import type { LoadWithStops } from "@/lib/loads/queries";
 
 export type WorkWeekDaySummary = {
   date: string;
   isOffDay: boolean;
   isToday: boolean;
+  /** Past calendar day (before today). */
+  isPast: boolean;
   loadCount: number;
   /** null → show "—" (e.g. active load with no pay yet). */
   totalEarnings: number | null;
@@ -27,6 +30,8 @@ export type WorkWeekDaySummary = {
   totalDrivenMiles: number | null;
   /** Day card includes an in-progress active load (live preview). */
   includesActivePreview: boolean;
+  /** Flat daily pay when the day has no loads (past empty days). */
+  dailyPayAmount: number | null;
 };
 
 export type WorkStatsSummary = {
@@ -55,7 +60,8 @@ function milesLabel(miles: number): string {
  * Per-day card totals for the work-week grid.
  * Non-today days: completed loads only.
  * Day matching an active load's `load_date`: completed + live active preview.
- * Work Stats strip stays completed-only via {@link summarizeWorkWeekStats}.
+ * Work Stats strip stays completed-only via {@link summarizeWorkWeekStats}
+ * (plus daily pay totals passed separately).
  */
 export function summarizeWorkWeekDays(
   days: string[],
@@ -71,6 +77,7 @@ export function summarizeWorkWeekDays(
     | "starting_mileage"
     | "ending_mileage"
   > | null = null,
+  dailyPayByDate: Map<string, number> = new Map(),
 ): WorkWeekDaySummary[] {
   const offSet = new Set(offDays);
   const byDate = new Map<string, Load[]>();
@@ -140,13 +147,23 @@ export function summarizeWorkWeekDays(
       }
     }
 
+    const dailyPayAmount =
+      loadCount === 0 ? (dailyPayByDate.get(date) ?? null) : null;
+
     return {
       date,
       isOffDay: offSet.has(weekday),
       isToday: date === today,
+      isPast: date < today,
       loadCount,
       totalEarnings:
-        loadCount === 0 ? 0 : hasPay ? earningsSum : includesActivePreview ? null : 0,
+        loadCount === 0
+          ? (dailyPayAmount ?? 0)
+          : hasPay
+            ? earningsSum
+            : includesActivePreview
+              ? null
+              : 0,
       totalDrivenMiles:
         loadCount === 0
           ? 0
@@ -156,26 +173,38 @@ export function summarizeWorkWeekDays(
               ? null
               : 0,
       includesActivePreview,
+      dailyPayAmount,
     };
   });
 }
 
 /**
- * Week-level stats from the already-fetched week loads.
+ * Week-level stats from the already-fetched week loads + daily pay.
  * Work Stats only count completed loads (archived excluded).
+ * Daily pay is included only for dates that have no loads (empty days).
  */
-export function summarizeWorkWeekStats(loads: Load[]): {
+export function summarizeWorkWeekStats(
+  loads: Load[],
+  dailyPayEntries: DailyPayEntry[] = [],
+): {
   loadCount: number;
   earnings: number;
 } {
   let loadCount = 0;
   let earnings = 0;
+  const datesWithLoads = new Set<string>();
   for (const load of loads) {
+    datesWithLoads.add(load.load_date);
     if (load.status === "completed") {
       loadCount += 1;
       if (load.pay_amount != null) {
         earnings += Number(load.pay_amount);
       }
+    }
+  }
+  for (const entry of dailyPayEntries) {
+    if (!datesWithLoads.has(entry.work_date)) {
+      earnings += Number(entry.amount);
     }
   }
   return { loadCount, earnings };
@@ -398,7 +427,7 @@ export function WorkWeekHome({
         <ul className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
           {days.map((day) => (
             <li key={day.date} className="min-w-0">
-              <WorkWeekDayCard day={day} />
+              <WorkWeekDayCard day={day} canManage={canManage} />
             </li>
           ))}
         </ul>
@@ -427,14 +456,14 @@ export function WorkWeekHome({
             <WorkStatCard
               label="Week earnings"
               value={currency(stats.weekEarnings)}
-              hint="Completed loads"
+              hint="Loads + daily pay"
             />
           </li>
           <li className="min-w-0">
             <WorkStatCard
               label="Month earnings"
               value={currency(stats.monthEarnings)}
-              hint="Completed loads"
+              hint="Loads + daily pay"
             />
           </li>
         </ul>
@@ -467,10 +496,17 @@ function WorkStatCard({
   );
 }
 
-function WorkWeekDayCard({ day }: { day: WorkWeekDaySummary }) {
+function WorkWeekDayCard({
+  day,
+  canManage,
+}: {
+  day: WorkWeekDaySummary;
+  canManage: boolean;
+}) {
   const weekday = formatCardWeekday(day.date);
   const monthDay = formatCardMonthDay(day.date);
   const hasLoads = day.loadCount > 0;
+  const canAddDailyPay = !hasLoads && day.isPast && canManage;
 
   return (
     <article
@@ -527,6 +563,12 @@ function WorkWeekDayCard({ day }: { day: WorkWeekDaySummary }) {
             </dd>
           </div>
         </dl>
+      ) : canAddDailyPay || day.dailyPayAmount != null ? (
+        <DailyPayDayEditor
+          workDate={day.date}
+          amount={day.dailyPayAmount}
+          canEdit={canAddDailyPay}
+        />
       ) : (
         <p className="mt-auto rounded-xl border border-dashed border-border/80 bg-background/50 px-2 py-2 text-center text-xs text-muted-foreground dark:bg-background/20">
           No load logged

@@ -20,8 +20,10 @@ import {
 } from "@/lib/loads/date";
 import {
   getActiveLoadForDriver,
+  getDailyPayForWorkWeek,
   getLatestAdp,
   getLoadsForWorkWeek,
+  getMonthDailyPayTotal,
   getMonthLoadStats,
 } from "@/lib/loads/queries";
 import { createClient } from "@/lib/supabase/server";
@@ -114,12 +116,19 @@ export default async function HomePage() {
 
     const [todayYear, todayMonth] = today.split("-").map(Number);
 
-    const [weekLoads, monthStats, latestAdp, activeLoad] = await Promise.all([
-      getLoadsForWorkWeek(userId, weekStart, weekEnd),
-      getMonthLoadStats(userId, todayYear!, todayMonth!),
-      getLatestAdp(userId),
-      getActiveLoadForDriver(userId),
-    ]);
+    const [weekLoads, monthStats, latestAdp, activeLoad, weekDailyPay, monthDailyPay] =
+      await Promise.all([
+        getLoadsForWorkWeek(userId, weekStart, weekEnd),
+        getMonthLoadStats(userId, todayYear!, todayMonth!),
+        getLatestAdp(userId),
+        getActiveLoadForDriver(userId),
+        getDailyPayForWorkWeek(userId, weekStart, weekEnd),
+        getMonthDailyPayTotal(userId, todayYear!, todayMonth!),
+      ]);
+
+    const dailyPayByDate = new Map(
+      weekDailyPay.map((entry) => [entry.work_date, Number(entry.amount)]),
+    );
 
     const daySummaries = summarizeWorkWeekDays(
       days,
@@ -127,8 +136,9 @@ export default async function HomePage() {
       offDays,
       today,
       activeLoad,
+      dailyPayByDate,
     );
-    const weekStats = summarizeWorkWeekStats(weekLoads);
+    const weekStats = summarizeWorkWeekStats(weekLoads, weekDailyPay);
 
     workWeekSection = (
       <WorkWeekHome
@@ -138,7 +148,7 @@ export default async function HomePage() {
           weekLoads: weekStats.loadCount,
           weekEarnings: weekStats.earnings,
           monthLoads: monthStats.loadCount,
-          monthEarnings: monthStats.earnings,
+          monthEarnings: monthStats.earnings + monthDailyPay,
         }}
         latestAdp={latestAdp}
         activeLoad={activeLoad}

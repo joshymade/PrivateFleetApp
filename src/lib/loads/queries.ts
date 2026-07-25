@@ -1,6 +1,7 @@
 ﻿import { createClient } from "@/lib/supabase/server";
 import type {
   AdpEntry,
+  DailyPayEntry,
   Load,
   LoadStop,
   LoadTrailerHistory,
@@ -216,6 +217,72 @@ export async function getLatestAdp(
 
   if (error || !data) return null;
   return data as AdpEntry;
+}
+
+/** Owner-scoped daily pay entries for a work-week date range (inclusive). */
+export async function getDailyPayForWorkWeek(
+  userId: string,
+  weekStart: string,
+  weekEnd: string,
+): Promise<DailyPayEntry[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("daily_pay_entries")
+    .select("*")
+    .eq("driver_id", userId)
+    .gte("work_date", weekStart)
+    .lte("work_date", weekEnd)
+    .order("work_date", { ascending: true });
+
+  if (error || !data) return [];
+  return data as DailyPayEntry[];
+}
+
+/** Sum of daily pay amounts for a calendar month (owner-scoped).
+ * Excludes days that already have a non-cancelled/non-archived load so
+ * totals never double-count load pay + daily pay.
+ */
+export async function getMonthDailyPayTotal(
+  userId: string,
+  year: number,
+  month: number,
+): Promise<number> {
+  const supabase = await createClient();
+  const { start, end } = monthBounds(year, month);
+
+  const [{ data: payRows, error: payError }, { data: loadRows, error: loadError }] =
+    await Promise.all([
+      supabase
+        .from("daily_pay_entries")
+        .select("work_date, amount")
+        .eq("driver_id", userId)
+        .gte("work_date", start)
+        .lte("work_date", end),
+      supabase
+        .from("loads")
+        .select("load_date")
+        .eq("assigned_driver_id", userId)
+        .gte("load_date", start)
+        .lte("load_date", end)
+        .neq("status", "cancelled")
+        .neq("status", "archived"),
+    ]);
+
+  if (payError || !payRows) return 0;
+
+  const datesWithLoads = new Set(
+    !loadError && loadRows
+      ? (loadRows as Pick<Load, "load_date">[]).map((r) => r.load_date)
+      : [],
+  );
+
+  let total = 0;
+  for (const row of payRows as Pick<DailyPayEntry, "work_date" | "amount">[]) {
+    if (!datesWithLoads.has(row.work_date)) {
+      total += Number(row.amount);
+    }
+  }
+  return total;
 }
 
 /** Compact row for damage-report load linking (no stops). */

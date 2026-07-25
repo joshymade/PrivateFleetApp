@@ -101,6 +101,17 @@ export type AdpEntry = {
   created_at: string;
 };
 
+/** Driver-entered earned pay for a past day with no loads. */
+export type DailyPayEntry = {
+  id: string;
+  driver_id: string;
+  work_date: string;
+  amount: number;
+  note: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 export type ContactRequestCategory =
   | "identity"
   | "app_issue"
