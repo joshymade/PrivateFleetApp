@@ -3,6 +3,7 @@ import { AccountNavCard } from "@/components/account/account-nav-card";
 import { AccountDataResetButtons } from "@/components/account/account-data-reset-buttons";
 import { AdpHistorySection } from "@/components/account/adp-history-section";
 import { DriverWeekSettings } from "@/components/account/driver-week-settings";
+import { NextPayDateSettings } from "@/components/account/next-pay-date-settings";
 import { ProfileRegionForm } from "@/components/account/profile-region-form";
 import { SignOutButton } from "@/components/auth/sign-out-button";
 import { AdminContactEmailForm } from "@/components/profile/admin-contact-email-form";
@@ -194,6 +195,11 @@ export default async function AccountPage() {
               weekStartDay={weekStartDay}
               offDays={offDays}
               currentTruckNumber={profile?.current_truck_number ?? null}
+            />
+          </div>
+          <div className="border-t border-border pt-4">
+            <NextPayDateSettings
+              nextPayDate={profile?.next_pay_date ?? null}
             />
           </div>
           <AccountDataResetButtons />

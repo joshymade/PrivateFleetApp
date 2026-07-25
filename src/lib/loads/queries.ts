@@ -62,7 +62,7 @@ export async function getSessionProfile(): Promise<{
   const { data: profile } = await supabase
     .from("profiles")
     .select(
-      "id, driver_id, email, full_name, work_state, show_work_state_on_home, identity_changes_remaining, admin_contact_email, week_start_day, off_days, current_truck_number, role, created_at, updated_at",
+      "id, driver_id, email, full_name, work_state, show_work_state_on_home, identity_changes_remaining, admin_contact_email, week_start_day, off_days, next_pay_date, current_truck_number, role, created_at, updated_at",
     )
     .eq("id", user.id)
     .maybeSingle();
@@ -175,31 +175,37 @@ export async function getLoadsForWorkWeek(
   return data as Load[];
 }
 
-/** Owner-scoped completed-load count + earnings for a calendar month. */
+/** Owner-scoped completed-load count + earnings + driven miles for a calendar month. */
 export async function getMonthLoadStats(
   userId: string,
   year: number,
   month: number,
-): Promise<{ loadCount: number; earnings: number }> {
+): Promise<{ loadCount: number; earnings: number; drivenMiles: number }> {
   const supabase = await createClient();
   const { start, end } = monthBounds(year, month);
   const { data, error } = await supabase
     .from("loads")
-    .select("status, pay_amount")
+    .select("status, pay_amount, starting_mileage, ending_mileage")
     .eq("assigned_driver_id", userId)
     .gte("load_date", start)
     .lte("load_date", end)
     .eq("status", "completed");
 
-  if (error || !data) return { loadCount: 0, earnings: 0 };
+  if (error || !data) return { loadCount: 0, earnings: 0, drivenMiles: 0 };
 
   let earnings = 0;
-  for (const row of data as Pick<Load, "status" | "pay_amount">[]) {
+  let driven = 0;
+  for (const row of data as Pick<
+    Load,
+    "status" | "pay_amount" | "starting_mileage" | "ending_mileage"
+  >[]) {
     if (row.pay_amount != null) {
       earnings += Number(row.pay_amount);
     }
+    const d = drivenMiles(row.starting_mileage, row.ending_mileage);
+    if (d != null) driven += d;
   }
-  return { loadCount: data.length, earnings };
+  return { loadCount: data.length, earnings, drivenMiles: driven };
 }
 
 /** Most recent manual ADP entry for the driver (by period_start). */

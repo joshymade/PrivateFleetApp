@@ -23,6 +23,8 @@ export type WorkWeekDaySummary = {
   isToday: boolean;
   /** Past calendar day (before today). */
   isPast: boolean;
+  /** Biweekly payday for this driver. */
+  isPayDay: boolean;
   loadCount: number;
   /** null → show "—" (e.g. active load with no pay yet). */
   totalEarnings: number | null;
@@ -35,10 +37,12 @@ export type WorkWeekDaySummary = {
 };
 
 export type WorkStatsSummary = {
-  weekLoads: number;
-  weekEarnings: number;
+  periodLoads: number;
+  periodEarnings: number;
+  periodDrivenMiles: number;
   monthLoads: number;
   monthEarnings: number;
+  monthDrivenMiles: number;
 };
 
 function currency(amount: number): string {
@@ -78,6 +82,7 @@ export function summarizeWorkWeekDays(
     | "ending_mileage"
   > | null = null,
   dailyPayByDate: Map<string, number> = new Map(),
+  payDayDate: string | null = null,
 ): WorkWeekDaySummary[] {
   const offSet = new Set(offDays);
   const byDate = new Map<string, Load[]>();
@@ -155,6 +160,7 @@ export function summarizeWorkWeekDays(
       isOffDay: offSet.has(weekday),
       isToday: date === today,
       isPast: date < today,
+      isPayDay: payDayDate != null && date === payDayDate,
       loadCount,
       totalEarnings:
         loadCount === 0
@@ -179,8 +185,8 @@ export function summarizeWorkWeekDays(
 }
 
 /**
- * Week-level stats from the already-fetched week loads + daily pay.
- * Work Stats only count completed loads (archived excluded).
+ * Period-level stats from loads + daily pay.
+ * Stats only count completed loads (archived excluded).
  * Daily pay is included only for dates that have no loads (empty days).
  */
 export function summarizeWorkWeekStats(
@@ -189,9 +195,11 @@ export function summarizeWorkWeekStats(
 ): {
   loadCount: number;
   earnings: number;
+  drivenMiles: number;
 } {
   let loadCount = 0;
   let earnings = 0;
+  let driven = 0;
   const datesWithLoads = new Set<string>();
   for (const load of loads) {
     datesWithLoads.add(load.load_date);
@@ -200,6 +208,8 @@ export function summarizeWorkWeekStats(
       if (load.pay_amount != null) {
         earnings += Number(load.pay_amount);
       }
+      const d = drivenMiles(load.starting_mileage, load.ending_mileage);
+      if (d != null) driven += d;
     }
   }
   for (const entry of dailyPayEntries) {
@@ -207,7 +217,7 @@ export function summarizeWorkWeekStats(
       earnings += Number(entry.amount);
     }
   }
-  return { loadCount, earnings };
+  return { loadCount, earnings, drivenMiles: driven };
 }
 
 export function WorkWeekHome({
@@ -218,6 +228,8 @@ export function WorkWeekHome({
   activeLoad,
   currentTruckNumber = null,
   canManage,
+  periodMode = false,
+  needsPayDate = false,
 }: {
   weekLabel: string;
   days: WorkWeekDaySummary[];
@@ -227,6 +239,10 @@ export function WorkWeekHome({
   /** Profile fallback when active load has no truck snapshot yet. */
   currentTruckNumber?: string | null;
   canManage: boolean;
+  /** True when showing the 14-day pay period instead of a work week. */
+  periodMode?: boolean;
+  /** Prompt driver to set next_pay_date on Account. */
+  needsPayDate?: boolean;
 }) {
   const currentStopInfo = activeLoad
     ? resolveCurrentStop(activeLoad.load_stops)
@@ -397,11 +413,26 @@ export function WorkWeekHome({
         </section>
       ) : null}
 
+      {needsPayDate ? (
+        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-950 dark:border-emerald-800/70 dark:bg-emerald-950/40 dark:text-emerald-50">
+          <p className="font-medium">Set your next pay date</p>
+          <p className="mt-1 text-sm text-emerald-900/80 dark:text-emerald-100/80">
+            Unlock the 2-week pay-period view on Home.{" "}
+            <Link
+              href="/account"
+              className="font-semibold underline underline-offset-2"
+            >
+              Open Account →
+            </Link>
+          </p>
+        </div>
+      ) : null}
+
       <section className="space-y-3">
         <div className="flex items-start justify-between gap-3 px-0.5">
           <div>
             <h2 className="text-base font-semibold text-foreground">
-              Current work week
+              {periodMode ? "Current pay period" : "Current work week"}
             </h2>
             <p className="mt-0.5 text-sm text-muted-foreground">{weekLabel}</p>
           </div>
@@ -440,22 +471,22 @@ export function WorkWeekHome({
         <ul className="grid grid-cols-2 gap-2.5">
           <li className="min-w-0">
             <WorkStatCard
-              label="Total completed loads"
-              value={String(stats.weekLoads)}
-              hint="This week"
+              label="Completed loads"
+              value={String(stats.periodLoads)}
+              hint={periodMode ? "This pay period" : "This week"}
             />
           </li>
           <li className="min-w-0">
             <WorkStatCard
-              label="Total completed loads"
+              label="Completed loads"
               value={String(stats.monthLoads)}
               hint="This month"
             />
           </li>
           <li className="min-w-0">
             <WorkStatCard
-              label="Week earnings"
-              value={currency(stats.weekEarnings)}
+              label={periodMode ? "Period earnings" : "Week earnings"}
+              value={currency(stats.periodEarnings)}
               hint="Loads + daily pay"
             />
           </li>
@@ -464,6 +495,20 @@ export function WorkWeekHome({
               label="Month earnings"
               value={currency(stats.monthEarnings)}
               hint="Loads + daily pay"
+            />
+          </li>
+          <li className="min-w-0">
+            <WorkStatCard
+              label={periodMode ? "Period miles" : "Week miles"}
+              value={milesLabel(stats.periodDrivenMiles)}
+              hint="Driven (odometer)"
+            />
+          </li>
+          <li className="min-w-0">
+            <WorkStatCard
+              label="Month miles"
+              value={milesLabel(stats.monthDrivenMiles)}
+              hint="Driven (odometer)"
             />
           </li>
         </ul>
@@ -512,11 +557,13 @@ function WorkWeekDayCard({
     <article
       className={[
         "flex h-full min-h-[7.5rem] flex-col rounded-2xl border px-3 py-3",
-        day.isToday
-          ? "border-accent/80 bg-accent/10 ring-1 ring-accent/40"
-          : day.isOffDay
-            ? "border-dashed border-border bg-muted/40"
-            : "border-border bg-card",
+        day.isPayDay
+          ? "border-emerald-400/80 bg-emerald-100 ring-1 ring-emerald-400/50 dark:border-emerald-600/80 dark:bg-emerald-950/55 dark:ring-emerald-500/40"
+          : day.isToday
+            ? "border-accent/80 bg-accent/10 ring-1 ring-accent/40"
+            : day.isOffDay
+              ? "border-dashed border-border bg-muted/40"
+              : "border-border bg-card",
       ].join(" ")}
     >
       <div className="flex items-start justify-between gap-1.5">
@@ -526,15 +573,31 @@ function WorkWeekDayCard({
           </p>
           <p className="text-xs text-muted-foreground">{monthDay}</p>
         </div>
-        {day.isOffDay ? (
-          <span className="shrink-0 rounded-md bg-foreground/5 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-            Off
-          </span>
-        ) : day.isToday ? (
-          <span className="shrink-0 rounded-md bg-accent/30 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-accent-foreground">
-            Today
-          </span>
-        ) : null}
+        <div className="flex shrink-0 flex-col items-end gap-1">
+          {day.isPayDay ? (
+            <span className="inline-flex items-center gap-0.5 rounded-md bg-emerald-600/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-800 dark:bg-emerald-400/20 dark:text-emerald-200">
+              <span aria-hidden className="text-[11px] font-bold leading-none">
+                $
+              </span>
+              Pay day
+            </span>
+          ) : null}
+          {day.isOffDay && !day.isPayDay ? (
+            <span className="rounded-md bg-foreground/5 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+              Off
+            </span>
+          ) : null}
+          {day.isToday && !day.isPayDay ? (
+            <span className="rounded-md bg-accent/30 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-accent-foreground">
+              Today
+            </span>
+          ) : null}
+          {day.isToday && day.isPayDay ? (
+            <span className="rounded-md bg-emerald-600/20 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-900 dark:text-emerald-100">
+              Today
+            </span>
+          ) : null}
+        </div>
       </div>
 
       {hasLoads ? (

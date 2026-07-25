@@ -31,6 +31,11 @@ export type Profile = {
   /** Weekday numbers (0–6) the driver is normally off. Loads still allowed. */
   off_days: number[];
   /**
+   * Known payday (YYYY-MM-DD). Biweekly paydays = this date ± 14 days.
+   * Null until the driver sets it on Account.
+   */
+  next_pay_date: string | null;
+  /**
    * Driver's current tractor/truck number; stamped onto new loads until changed.
    */
   current_truck_number: string | null;

@@ -272,6 +272,41 @@ export async function updateDriverWeekPrefs(input: {
   return { ok: true };
 }
 
+export async function updateNextPayDate(input: {
+  nextPayDate: string | null;
+}): Promise<ActionResult> {
+  const { supabase, user, error } = await requireUser();
+  if (!user) return { ok: false, error: error ?? "Sign in required." };
+
+  const raw = input.nextPayDate?.trim() ?? "";
+  let nextPayDate: string | null = null;
+  if (raw) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+      return { ok: false, error: "Enter a valid pay date." };
+    }
+    const [y, m, d] = raw.split("-").map(Number);
+    const parsed = new Date(y, m - 1, d);
+    if (
+      parsed.getFullYear() !== y ||
+      parsed.getMonth() !== m - 1 ||
+      parsed.getDate() !== d
+    ) {
+      return { ok: false, error: "Enter a valid pay date." };
+    }
+    nextPayDate = raw;
+  }
+
+  const { error: updateError } = await supabase
+    .from("profiles")
+    .update({ next_pay_date: nextPayDate })
+    .eq("id", user.id);
+
+  if (updateError) return { ok: false, error: updateError.message };
+
+  revalidateAccountSurfaces();
+  return { ok: true };
+}
+
 export async function updateCurrentTruckNumber(input: {
   currentTruckNumber: string;
 }): Promise<ActionResult> {

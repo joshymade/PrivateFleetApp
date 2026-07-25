@@ -13,6 +13,9 @@ import {
   getSessionProfile,
 } from "@/lib/auth/profile";
 import {
+  currentPayPeriod,
+  formatCardMonthDay,
+  formatPayPeriodLabel,
   formatWeekLabel,
   todayDateString,
   workWeekDays,
@@ -105,55 +108,79 @@ export default async function HomePage() {
     );
   }
 
-  // Drivers only: private work-week analytics (owner-scoped loads + ADP).
+  // Drivers only: private pay-period / work-week analytics (owner-scoped).
   let workWeekSection: ReactNode = null;
   if (userId && isDriver && profile) {
     const weekStartDay = profile.week_start_day ?? 5;
     const offDays = profile.off_days ?? [];
-    const weekStart = workWeekStart(today, weekStartDay);
-    const days = workWeekDays(weekStart);
-    const weekEnd = days[6]!;
+    const nextPayDate = profile.next_pay_date ?? null;
+    const periodMode = Boolean(nextPayDate);
+
+    let rangeStart: string;
+    let rangeEnd: string;
+    let days: string[];
+    let payDayDate: string | null = null;
+    let rangeLabel: string;
+
+    if (nextPayDate) {
+      const period = currentPayPeriod(today, nextPayDate);
+      rangeStart = period.start;
+      rangeEnd = period.end;
+      days = period.days;
+      payDayDate = period.payDay;
+      rangeLabel = `${formatPayPeriodLabel(period.start, period.end)} · Pay day ${formatCardMonthDay(period.payDay)}`;
+    } else {
+      rangeStart = workWeekStart(today, weekStartDay);
+      days = workWeekDays(rangeStart);
+      rangeEnd = days[6]!;
+      rangeLabel = formatWeekLabel(rangeStart);
+    }
 
     const [todayYear, todayMonth] = today.split("-").map(Number);
 
-    const [weekLoads, monthStats, latestAdp, activeLoad, weekDailyPay, monthDailyPay] =
+    const [periodLoads, monthStats, latestAdp, activeLoad, periodDailyPay, monthDailyPay] =
       await Promise.all([
-        getLoadsForWorkWeek(userId, weekStart, weekEnd),
+        getLoadsForWorkWeek(userId, rangeStart, rangeEnd),
         getMonthLoadStats(userId, todayYear!, todayMonth!),
         getLatestAdp(userId),
         getActiveLoadForDriver(userId),
-        getDailyPayForWorkWeek(userId, weekStart, weekEnd),
+        getDailyPayForWorkWeek(userId, rangeStart, rangeEnd),
         getMonthDailyPayTotal(userId, todayYear!, todayMonth!),
       ]);
 
     const dailyPayByDate = new Map(
-      weekDailyPay.map((entry) => [entry.work_date, Number(entry.amount)]),
+      periodDailyPay.map((entry) => [entry.work_date, Number(entry.amount)]),
     );
 
     const daySummaries = summarizeWorkWeekDays(
       days,
-      weekLoads,
+      periodLoads,
       offDays,
       today,
       activeLoad,
       dailyPayByDate,
+      payDayDate,
     );
-    const weekStats = summarizeWorkWeekStats(weekLoads, weekDailyPay);
+    const periodStats = summarizeWorkWeekStats(periodLoads, periodDailyPay);
 
     workWeekSection = (
       <WorkWeekHome
-        weekLabel={formatWeekLabel(weekStart)}
+        weekLabel={rangeLabel}
         days={daySummaries}
         stats={{
-          weekLoads: weekStats.loadCount,
-          weekEarnings: weekStats.earnings,
+          periodLoads: periodStats.loadCount,
+          periodEarnings: periodStats.earnings,
+          periodDrivenMiles: periodStats.drivenMiles,
           monthLoads: monthStats.loadCount,
           monthEarnings: monthStats.earnings + monthDailyPay,
+          monthDrivenMiles: monthStats.drivenMiles,
         }}
         latestAdp={latestAdp}
         activeLoad={activeLoad}
         currentTruckNumber={profile.current_truck_number}
         canManage={canManage}
+        periodMode={periodMode}
+        needsPayDate={!nextPayDate}
       />
     );
   }

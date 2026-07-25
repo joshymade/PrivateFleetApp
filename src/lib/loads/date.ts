@@ -207,3 +207,74 @@ export const WEEKDAY_LABELS = [
   "Friday",
   "Saturday",
 ] as const;
+
+/** Calendar-day difference: `a` − `b` in whole days (local dates). */
+export function calendarDaysBetween(a: string, b: string): number {
+  const [ay, am, ad] = a.split("-").map(Number);
+  const [by, bm, bd] = b.split("-").map(Number);
+  const aUtc = Date.UTC(ay, am - 1, ad);
+  const bUtc = Date.UTC(by, bm - 1, bd);
+  return Math.round((aUtc - bUtc) / 86_400_000);
+}
+
+export function addCalendarDays(dateStr: string, delta: number): string {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  return toDateString(new Date(y, m - 1, d + delta));
+}
+
+/**
+ * True when `dateStr` falls on the biweekly payday grid anchored at `anchorPayDate`.
+ * Example anchors: 2026-06-04, 2026-06-18, 2026-07-02, 2026-07-16, 2026-07-30 (Thursdays).
+ */
+export function isPayDay(dateStr: string, anchorPayDate: string): boolean {
+  const diff = calendarDaysBetween(dateStr, anchorPayDate);
+  return ((diff % 14) + 14) % 14 === 0;
+}
+
+/**
+ * Next payday on or after `today` using the biweekly grid from `anchorPayDate`.
+ */
+export function upcomingPayDay(today: string, anchorPayDate: string): string {
+  const diff = calendarDaysBetween(today, anchorPayDate);
+  const mod = ((diff % 14) + 14) % 14;
+  if (mod === 0) return today;
+  return addCalendarDays(today, 14 - mod);
+}
+
+export type PayPeriod = {
+  start: string;
+  end: string;
+  /** 14 YYYY-MM-DD dates from start through payday (inclusive). */
+  days: string[];
+  payDay: string;
+};
+
+/**
+ * Current pay period: 14 days ending on the upcoming payday (inclusive).
+ * e.g. payday Jul 30 → Jul 17 … Jul 30.
+ */
+export function currentPayPeriod(
+  today: string,
+  anchorPayDate: string,
+): PayPeriod {
+  const payDay = upcomingPayDay(today, anchorPayDate);
+  const start = addCalendarDays(payDay, -13);
+  const days = Array.from({ length: 14 }, (_, i) => addCalendarDays(start, i));
+  return { start, end: payDay, days, payDay };
+}
+
+export function formatPayPeriodLabel(start: string, end: string): string {
+  const [sy, sm, sd] = start.split("-").map(Number);
+  const [ey, em, ed] = end.split("-").map(Number);
+  const startDate = new Date(sy, sm - 1, sd);
+  const endDate = new Date(ey, em - 1, ed);
+  const startLabel = startDate.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+  });
+  const endLabel = endDate.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+  });
+  return `${startLabel} – ${endLabel}`;
+}
