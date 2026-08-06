@@ -6,7 +6,7 @@ import { LoadsListExpand } from "@/components/loads/loads-list-expand";
 import { LoadsMonthCharts } from "@/components/loads/loads-month-charts";
 import { LoadsMonthTotals } from "@/components/loads/loads-month-totals";
 import { MonthNavigator } from "@/components/loads/month-navigator";
-import { pageTitleClassName } from "@/components/ui/page-title";
+import { pageTitleClassName, sectionHeadingColorClassName } from "@/components/ui/page-title";
 import {
   canAccessLoads,
   driverNeedsProfileSetup,
@@ -132,14 +132,18 @@ export default async function LoadsPage({
       <LoadsMonthTotals totals={monthTotals} />
 
       <section className="space-y-3">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+        <h2
+          className={`text-sm font-semibold uppercase tracking-wide ${sectionHeadingColorClassName}`}
+        >
           Month charts
         </h2>
         <LoadsMonthCharts days={monthChartDays} />
       </section>
 
       <section className="space-y-4">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+        <h2
+          className={`text-sm font-semibold uppercase tracking-wide ${sectionHeadingColorClassName}`}
+        >
           {isCurrentMonth
             ? usePreview
               ? "Recent loads"
@@ -187,7 +191,9 @@ export default async function LoadsPage({
 
       {isCurrentMonth && olderLoads.length > 0 ? (
         <section>
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+          <h2
+            className={`text-sm font-semibold uppercase tracking-wide ${sectionHeadingColorClassName}`}
+          >
             Older loads
           </h2>
           <div className="mt-2 rounded-2xl border border-border bg-background px-4">

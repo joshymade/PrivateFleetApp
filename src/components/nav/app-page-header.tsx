@@ -41,7 +41,9 @@ export function AppPageHeader({
   return (
     <header className="space-y-1.5 border-b border-border pb-3 pt-1">
       <div className="flex items-center justify-between gap-3">
-        <span className="min-w-0 inline-flex items-center rounded-full bg-brand/10 px-2.5 py-1 text-xs font-semibold tracking-wide text-brand ring-1 ring-accent/60">
+        <span
+          className={`min-w-0 inline-flex items-center rounded-full bg-brand/10 px-2.5 py-1 text-xs font-semibold tracking-wide ring-1 ring-accent/60 dark:bg-accent/15 ${pageTitleColorClassName}`}
+        >
           {welcomeChipLabel(role)}
         </span>
         <div className="flex shrink-0 items-center gap-1.5">

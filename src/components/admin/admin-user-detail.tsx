@@ -12,6 +12,7 @@ import {
   updateUserRole,
 } from "@/app/(app)/admin/users/actions";
 import { DriverId } from "@/components/ui/driver-id";
+import { sectionHeadingColorClassName } from "@/components/ui/page-title";
 import type { AdminUserDetail } from "@/lib/admin/users";
 import { FLEET_REGIONS } from "@/lib/fleet-region";
 import type { ContactRequestCategory, UserRole } from "@/types/database";
@@ -150,8 +151,9 @@ export function AdminUserDetailPanel({
       <section className="space-y-2 rounded-2xl border border-border bg-card p-4">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
-            <h2 className="truncate text-base font-semibold text-foreground">
-              {user.full_name || user.email || "Unnamed user"}
+            <h2
+              className={`truncate text-base font-semibold ${sectionHeadingColorClassName}`}
+            >              {user.full_name || user.email || "Unnamed user"}
               {isSelf ? (
                 <span className="ml-1 text-xs font-normal text-muted-foreground">
                   (you)
@@ -290,7 +292,9 @@ export function AdminUserDetailPanel({
       </section>
 
       <section className="space-y-3">
-        <h2 className="text-sm font-semibold text-foreground">Messages</h2>
+        <h2 className={`text-sm font-semibold ${sectionHeadingColorClassName}`}>
+          Messages
+        </h2>
         {thread.length === 0 ? (
           <p className="text-sm text-muted-foreground">
             No messages yet. Send one below — it appears in their Contact inbox.
@@ -356,7 +360,9 @@ export function AdminUserDetailPanel({
       </section>
 
       <section className="space-y-2 border-t border-border pt-4">
-        <h2 className="text-sm font-semibold text-foreground">Admin actions</h2>
+        <h2 className={`text-sm font-semibold ${sectionHeadingColorClassName}`}>
+          Admin actions
+        </h2>
 
         {!confirm ? (
           <div className="flex flex-col gap-2">

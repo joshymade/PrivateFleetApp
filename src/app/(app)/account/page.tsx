@@ -297,7 +297,7 @@ export default async function AccountPage() {
       {!setupMode ? (
         <AccountSettingsSection
           title="Appearance"
-          description="Choose light or dark. Preference is saved on this device."
+          description="Light, dark, or Sunset (follows sunrise/sunset). Saved on this device."
         >
           <ThemeToggle />
         </AccountSettingsSection>

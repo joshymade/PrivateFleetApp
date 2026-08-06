@@ -1,4 +1,5 @@
 import { MaskedMoney } from "@/components/ui/masked-money";
+import { sectionHeadingColorClassName } from "@/components/ui/page-title";
 import { formatDurationHm } from "@/lib/loads/shift-time";
 import type { MonthLoadTotals } from "@/lib/loads/queries";
 import {
@@ -16,7 +17,9 @@ export function LoadsMonthTotals({ totals }: { totals: MonthLoadTotals }) {
 
   return (
     <section className="rounded-2xl border border-border bg-background p-4">
-      <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+      <h2
+        className={`text-sm font-semibold uppercase tracking-wide ${sectionHeadingColorClassName}`}
+      >
         Month totals
       </h2>
       <dl className="mt-3 grid grid-cols-2 gap-3 text-sm">

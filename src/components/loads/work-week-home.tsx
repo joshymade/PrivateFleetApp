@@ -8,7 +8,10 @@ import { StopSealField } from "@/components/loads/stop-seal-field";
 import { StopStoreCountsField } from "@/components/loads/stop-store-counts-field";
 import { StopTrailerField } from "@/components/loads/stop-trailer-field";
 import { MaskedMoney } from "@/components/ui/masked-money";
-import { pageTitleColorClassName } from "@/components/ui/page-title";
+import {
+  pageTitleColorClassName,
+  sectionHeadingColorClassName,
+} from "@/components/ui/page-title";
 import type { EarningsDaySnapshot } from "@/lib/loads/daily-earnings-reminder";
 import {
   drivenMiles,
@@ -571,7 +574,9 @@ export function WorkWeekHome({
       <section className="space-y-3">
         <div className="flex items-start justify-between gap-3 px-0.5">
           <div>
-            <h2 className="text-base font-semibold text-foreground">
+            <h2
+              className={`text-base font-semibold ${sectionHeadingColorClassName}`}
+            >
               {periodMode ? "Current pay period" : "Current work week"}
             </h2>
             <p className="mt-0.5 text-sm text-muted-foreground">

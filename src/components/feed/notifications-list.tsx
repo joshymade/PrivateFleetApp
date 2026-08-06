@@ -7,6 +7,7 @@ import {
   markAllNotificationsRead,
   markNotificationRead,
 } from "@/app/(app)/account/actions";
+import { sectionHeadingColorClassName } from "@/components/ui/page-title";
 import { formatFeedTimestamp } from "@/lib/format-time";
 import type { AppNotification } from "@/types/database";
 
@@ -152,8 +153,10 @@ export function NotificationsModal({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between gap-2 border-b border-border px-5 py-4">
-          <h2 id={titleId} className="text-base font-semibold text-foreground">
-            Notifications
+          <h2
+            id={titleId}
+            className={`text-base font-semibold ${sectionHeadingColorClassName}`}
+          >            Notifications
             {unreadCount > 0 ? (
               <span className="ml-2 rounded-full bg-primary px-2 py-0.5 text-[10px] font-semibold text-primary-foreground">
                 {unreadCount}
@@ -247,7 +250,7 @@ export function NotificationsList({
   return (
     <section className="rounded-2xl border border-border bg-card p-4">
       <div className="flex items-center justify-between gap-2">
-        <h2 className="text-sm font-semibold text-foreground">
+        <h2 className={`text-sm font-semibold ${sectionHeadingColorClassName}`}>
           Notifications
           {unreadCount > 0 ? (
             <span className="ml-2 rounded-full bg-primary px-2 py-0.5 text-[10px] font-semibold text-primary-foreground">

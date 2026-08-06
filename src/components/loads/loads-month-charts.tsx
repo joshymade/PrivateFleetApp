@@ -15,6 +15,7 @@ import {
 import { useHideMoney } from "@/lib/hide-money";
 import type { MonthChartDay } from "@/lib/loads/queries";
 import { displayMoney, MONEY_MASK } from "@/lib/money";
+import { sectionHeadingColorClassName } from "@/components/ui/page-title";
 import {
   buildUnpaidMilesPieSlices,
   formatMilesNumber,
@@ -43,7 +44,9 @@ function MilesDrivenPie({ days }: { days: MonthChartDay[] }) {
 
   return (
     <div className="rounded-2xl border border-border bg-background p-4">
-      <h3 className="text-sm font-semibold text-foreground">Miles Driven</h3>
+      <h3 className={`text-sm font-semibold ${sectionHeadingColorClassName}`}>
+        Miles Driven
+      </h3>
       <p className="mt-0.5 text-xs text-muted-foreground">
         Paid vs driven; unpaid gap is red shortfall or green extra paid
       </p>
@@ -116,7 +119,9 @@ function EarningsChart({ days }: { days: MonthChartDay[] }) {
 
   return (
     <div className="rounded-2xl border border-border bg-background p-4">
-      <h3 className="text-sm font-semibold text-foreground">Daily earnings</h3>
+      <h3 className={`text-sm font-semibold ${sectionHeadingColorClassName}`}>
+        Daily earnings
+      </h3>
       <p className="mt-0.5 text-xs text-muted-foreground">
         Pay by day for the month
       </p>

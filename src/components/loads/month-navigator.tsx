@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { sectionHeadingColorClassName } from "@/components/ui/page-title";
 import {
   formatMonthLabel,
   shiftYearMonth,
@@ -24,7 +25,9 @@ export function MonthNavigator({
       >
         ‹
       </Link>
-      <h2 className="text-base font-semibold tracking-tight text-foreground">
+      <h2
+        className={`text-base font-semibold tracking-tight ${sectionHeadingColorClassName}`}
+      >
         {formatMonthLabel(year, month)}
       </h2>
       <Link

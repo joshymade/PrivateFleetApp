@@ -3,6 +3,7 @@ import { CurrentTrailerField } from "@/components/loads/current-trailer-field";
 import { StopCompletedToggle } from "@/components/loads/stop-completed-toggle";
 import { StopTrailerField } from "@/components/loads/stop-trailer-field";
 import { driverIdClassName } from "@/components/ui/driver-id";
+import { pageTitleColorClassName } from "@/components/ui/page-title";
 import {
   formatDayOfWeek,
   formatLongDate,
@@ -52,7 +53,11 @@ export function DayOfWeekCard({
             Week {week}
           </span>
         </div>
-        <h2 className="mt-1 text-4xl font-semibold tracking-tight">{dayName}</h2>
+        <h2
+          className={`mt-1 text-4xl font-semibold tracking-tight ${pageTitleColorClassName}`}
+        >
+          {dayName}
+        </h2>
 
         {load ? (
           <div className="mt-6 space-y-4">

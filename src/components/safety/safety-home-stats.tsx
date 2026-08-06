@@ -1,5 +1,8 @@
 import Link from "next/link";
-import { pageTitleClassName } from "@/components/ui/page-title";
+import {
+  pageTitleClassName,
+  sectionHeadingColorClassName,
+} from "@/components/ui/page-title";
 import type { SafetyHomeStats } from "@/types/database";
 
 const emptyStats: SafetyHomeStats = {
@@ -110,7 +113,9 @@ export function SafetyHomeStatsGrid({
       </div>
 
       <div className="space-y-2">
-        <h2 className="text-sm font-semibold text-foreground">{regionLabel}</h2>
+        <h2 className={`text-sm font-semibold ${sectionHeadingColorClassName}`}>
+          {regionLabel}
+        </h2>
         {s.region == null ? (
           <p className="text-xs text-muted-foreground">
             Ask Admin to assign your region so these counts and the Safety Feed
@@ -143,7 +148,7 @@ export function SafetyHomeStatsGrid({
       </div>
 
       <div className="space-y-2">
-        <h2 className="text-sm font-semibold text-foreground">
+        <h2 className={`text-sm font-semibold ${sectionHeadingColorClassName}`}>
           All regions (fleet)
         </h2>
         <p className="text-xs text-muted-foreground">

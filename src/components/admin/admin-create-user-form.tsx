@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { createUser } from "@/app/(app)/admin/users/actions";
+import { sectionHeadingColorClassName } from "@/components/ui/page-title";
 import { FLEET_REGIONS } from "@/lib/fleet-region";
 
 const MIN_PASSWORD_LENGTH = 6;
@@ -44,7 +45,9 @@ export function AdminCreateUserForm() {
 
   return (
     <section className="rounded-2xl border border-border bg-card p-4">
-      <h2 className="text-sm font-semibold text-foreground">Create user</h2>
+      <h2 className={`text-sm font-semibold ${sectionHeadingColorClassName}`}>
+        Create user
+      </h2>
       <p className="mt-1 text-xs text-muted-foreground">
         Creates a confirmed account with a temporary password. The user must
         change it on first login.

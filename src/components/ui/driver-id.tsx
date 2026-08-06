@@ -1,7 +1,7 @@
 import type { ComponentPropsWithoutRef, ReactNode } from "react";
 
-/** Shared style for company Driver ID values (bold + signature brand blue). */
-export const driverIdClassName = "font-bold text-brand";
+/** Shared style for company Driver ID values (bold brand blue / gold in dark). */
+export const driverIdClassName = "font-bold text-brand dark:text-accent";
 
 type DriverIdProps = Omit<ComponentPropsWithoutRef<"span">, "children"> & {
   children: ReactNode;

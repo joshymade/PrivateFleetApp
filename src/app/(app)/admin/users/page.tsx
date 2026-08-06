@@ -2,7 +2,10 @@ import { redirect } from "next/navigation";
 import { AdminCreateUserForm } from "@/components/admin/admin-create-user-form";
 import { AdminRecentMessages } from "@/components/admin/admin-recent-messages";
 import { AdminUsersList } from "@/components/admin/admin-users-list";
-import { pageTitleClassName } from "@/components/ui/page-title";
+import {
+  pageTitleClassName,
+  sectionHeadingColorClassName,
+} from "@/components/ui/page-title";
 import { canAccessAdminUsers, getSessionProfile } from "@/lib/auth/profile";
 import {
   listAdminUsers,
@@ -39,7 +42,7 @@ export default async function AdminUsersPage() {
       <AdminCreateUserForm />
 
       <section className="flex flex-col gap-2">
-        <h2 className="text-sm font-semibold text-foreground">
+        <h2 className={`text-sm font-semibold ${sectionHeadingColorClassName}`}>
           Recent messages
         </h2>
         <p className="text-xs text-muted-foreground">

@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { sectionHeadingColorClassName } from "@/components/ui/page-title";
 
 type AccountSettingsSectionProps = {
   title: string;
@@ -38,7 +39,10 @@ export function AccountSettingsSection({
       }
     >
       <header className="flex flex-col gap-1">
-        <h2 id={headingId} className="text-sm font-semibold text-foreground">
+        <h2
+          id={headingId}
+          className={`text-sm font-semibold ${sectionHeadingColorClassName}`}
+        >
           {title}
         </h2>
         {description ? (

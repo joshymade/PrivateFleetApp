@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { LoadLabel } from "@/components/loads/load-label";
 import { MaskedMoney } from "@/components/ui/masked-money";
+import { sectionHeadingColorClassName } from "@/components/ui/page-title";
 import { drivenMiles, formatShortDate } from "@/lib/loads/date";
 import { RouteSnippet } from "@/components/loads/route-snippet";
 import {
@@ -37,8 +38,9 @@ export function LoadCard({ load }: { load: LoadWithStops }) {
           <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
             {formatShortDate(load.load_date)}
           </p>
-          <h3 className="mt-1 text-lg font-semibold tracking-tight text-foreground">
-            <LoadLabel loadNumber={load.load_number} />
+          <h3
+            className={`mt-1 text-lg font-semibold tracking-tight ${sectionHeadingColorClassName}`}
+          >            <LoadLabel loadNumber={load.load_number} />
           </h3>
         </div>
         <span

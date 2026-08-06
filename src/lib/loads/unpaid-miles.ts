@@ -15,11 +15,11 @@ export function formatMilesNumber(n: number): string {
   return Number.isInteger(n) ? String(n) : n.toFixed(1);
 }
 
-/** Signed miles for UI (includes minus for negatives). */
+/** Signed miles for UI (+ for positive, − for negative). */
 export function formatSignedMiles(n: number): string {
   const abs = formatMilesNumber(Math.abs(n));
   if (n < 0) return `-${abs}`;
-  if (n > 0) return abs;
+  if (n > 0) return `+${abs}`;
   return "0";
 }
 
