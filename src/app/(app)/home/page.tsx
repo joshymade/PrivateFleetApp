@@ -12,9 +12,12 @@ import {
   driverNeedsProfileSetup,
   getSessionProfile,
 } from "@/lib/auth/profile";
+import type { EarningsDaySnapshot } from "@/lib/loads/daily-earnings-reminder";
 import {
   addCalendarDays,
   currentPayPeriod,
+  DEFAULT_PAY_PERIOD_LENGTH_DAYS,
+  depositDayInPeriod,
   formatCardMonthDay,
   formatPayPeriodLabel,
   formatWeekLabel,
@@ -27,9 +30,6 @@ import {
   getDailyPayForWorkWeek,
   getLatestAdp,
   getLoadsForWorkWeek,
-  getMonthDailyPayTotal,
-  getMonthLoadStats,
-  getMonthWorkedMinutes,
   getShiftPunchesForRange,
   sumPunchMinutes,
 } from "@/lib/loads/queries";
@@ -112,7 +112,8 @@ export default async function HomePage() {
     );
   }
 
-  // Drivers only: private pay-period / work-week analytics (owner-scoped).
+  // Drivers only: Home day grid + earnings follow the stored Sat→Fri pay period
+  // when set; otherwise fall back to the driver's work-week settings.
   let workWeekSection: ReactNode = null;
   if (userId && isDriver && profile) {
     const weekStartDay = profile.week_start_day ?? 5;
@@ -120,7 +121,9 @@ export default async function HomePage() {
     const nextPayDate = profile.next_pay_date ?? null;
     const payPeriodStart =
       profile.pay_period_start ??
-      (nextPayDate ? addCalendarDays(nextPayDate, -13) : null);
+      (nextPayDate
+        ? addCalendarDays(nextPayDate, -(DEFAULT_PAY_PERIOD_LENGTH_DAYS - 1))
+        : null);
     const periodMode = Boolean(nextPayDate && payPeriodStart);
 
     let rangeStart: string;
@@ -134,7 +137,10 @@ export default async function HomePage() {
       rangeStart = period.start;
       rangeEnd = period.end;
       days = period.days;
-      payDayDate = period.payDay;
+      // $ icon: deposit for the prior period lands Thu of this Sat–Fri window.
+      // Header still shows this period's upcoming deposit (Fri end + 6).
+      const inRangeDeposit = depositDayInPeriod(period.start);
+      payDayDate = days.includes(inRangeDeposit) ? inRangeDeposit : null;
       rangeLabel = `${formatPayPeriodLabel(period.start, period.end)} · Ends ${formatCardMonthDay(period.end)} · Deposit ${formatCardMonthDay(period.payDay)}`;
     } else {
       rangeStart = workWeekStart(today, weekStartDay);
@@ -143,19 +149,32 @@ export default async function HomePage() {
       rangeLabel = formatWeekLabel(rangeStart);
     }
 
-    const [todayYear, todayMonth] = today.split("-").map(Number);
+    // Look back so "previous work day" reminders work across period boundaries.
+    const lookbackStart = addCalendarDays(rangeStart, -14);
 
-    const [periodLoads, monthStats, latestAdp, activeLoad, periodDailyPay, monthDailyPay, periodPunches, monthWorkedMinutes] =
-      await Promise.all([
-        getLoadsForWorkWeek(userId, rangeStart, rangeEnd),
-        getMonthLoadStats(userId, todayYear!, todayMonth!),
-        getLatestAdp(userId),
-        getActiveLoadForDriver(userId),
-        getDailyPayForWorkWeek(userId, rangeStart, rangeEnd),
-        getMonthDailyPayTotal(userId, todayYear!, todayMonth!),
-        getShiftPunchesForRange(userId, rangeStart, rangeEnd),
-        getMonthWorkedMinutes(userId, todayYear!, todayMonth!),
-      ]);
+    const [
+      lookbackLoads,
+      latestAdp,
+      activeLoad,
+      lookbackDailyPay,
+      lookbackPunches,
+    ] = await Promise.all([
+      getLoadsForWorkWeek(userId, lookbackStart, rangeEnd),
+      getLatestAdp(userId),
+      getActiveLoadForDriver(userId),
+      getDailyPayForWorkWeek(userId, lookbackStart, rangeEnd),
+      getShiftPunchesForRange(userId, lookbackStart, rangeEnd),
+    ]);
+
+    const periodLoads = lookbackLoads.filter(
+      (load) => load.load_date >= rangeStart && load.load_date <= rangeEnd,
+    );
+    const periodDailyPay = lookbackDailyPay.filter(
+      (entry) => entry.work_date >= rangeStart && entry.work_date <= rangeEnd,
+    );
+    const periodPunches = lookbackPunches.filter(
+      (punch) => punch.work_date >= rangeStart && punch.work_date <= rangeEnd,
+    );
 
     const dailyPayByDate = new Map(
       periodDailyPay.map((entry) => [entry.work_date, Number(entry.amount)]),
@@ -180,6 +199,38 @@ export default async function HomePage() {
     const periodStats = summarizeWorkWeekStats(periodLoads, periodDailyPay);
     const periodWorkedMinutes = sumPunchMinutes(periodPunches);
 
+    const lookbackDailyPayByDate = new Map(
+      lookbackDailyPay.map((entry) => [entry.work_date, Number(entry.amount)]),
+    );
+    const lookbackPunchesByDate = new Map(
+      lookbackPunches.map((punch) => [
+        punch.work_date,
+        { start_time: punch.start_time, end_time: punch.end_time },
+      ]),
+    );
+    const lookbackLoadDates = new Set(
+      lookbackLoads
+        .filter((l) => l.status !== "cancelled" && l.status !== "archived")
+        .map((l) => l.load_date),
+    );
+
+    const reminderDays: EarningsDaySnapshot[] = [];
+    for (
+      let cursor = lookbackStart;
+      cursor <= rangeEnd;
+      cursor = addCalendarDays(cursor, 1)
+    ) {
+      const punch = lookbackPunchesByDate.get(cursor);
+      reminderDays.push({
+        date: cursor,
+        isPast: cursor < today,
+        loadCount: lookbackLoadDates.has(cursor) ? 1 : 0,
+        dailyPayAmount: lookbackDailyPayByDate.get(cursor) ?? null,
+        punchStart: punch?.start_time ?? null,
+        punchEnd: punch?.end_time ?? null,
+      });
+    }
+
     workWeekSection = (
       <WorkWeekHome
         weekLabel={rangeLabel}
@@ -189,10 +240,6 @@ export default async function HomePage() {
           periodEarnings: periodStats.earnings,
           periodDrivenMiles: periodStats.drivenMiles,
           periodWorkedMinutes,
-          monthLoads: monthStats.loadCount,
-          monthEarnings: monthStats.earnings + monthDailyPay,
-          monthDrivenMiles: monthStats.drivenMiles,
-          monthWorkedMinutes,
         }}
         latestAdp={latestAdp}
         activeLoad={activeLoad}
@@ -200,6 +247,9 @@ export default async function HomePage() {
         canManage={canManage}
         periodMode={periodMode}
         needsPayDate={!periodMode}
+        periodStart={rangeStart}
+        periodEnd={rangeEnd}
+        reminderDays={reminderDays}
       />
     );
   }

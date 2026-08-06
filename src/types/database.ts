@@ -31,13 +31,13 @@ export type Profile = {
   /** Weekday numbers (0–6) the driver is normally off. Loads still allowed. */
   off_days: number[];
   /**
-   * Seed start of pay period (YYYY-MM-DD, inclusive).
+   * Seed start of pay period (YYYY-MM-DD, Saturday inclusive).
    * With next_pay_date (Friday end), length drives auto-advance. Null until set.
    */
   pay_period_start: string | null;
   /**
    * Seed end of pay period (YYYY-MM-DD, Friday). Later periods = start/end + n×length.
-   * Deposit/pay icon is Thursday of that end week (derived in app, not stored).
+   * Deposit/pay icon is Thursday after that Friday (period end + 6, derived in app).
    * Null until the driver sets the range on Account.
    */
   next_pay_date: string | null;

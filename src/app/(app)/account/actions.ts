@@ -387,7 +387,7 @@ function parseLocalDateInput(
   return { ok: true, value: trimmed };
 }
 
-/** Drivers set seed start/end; period end must be Friday; length multiple of 7. */
+/** Drivers set seed Sat→Fri range; deposit is derived as Friday end + 6. */
 export async function updatePayPeriod(input: {
   payPeriodStart: string | null;
   nextPayDate: string | null;
@@ -427,9 +427,17 @@ export async function updatePayPeriod(input: {
     return { ok: false, error: "Period end must be on or after start." };
   }
 
+  const [sy, sm, sd] = payPeriodStart.split("-").map(Number);
   const [ey, em, ed] = nextPayDate.split("-").map(Number);
+  const startWeekday = new Date(sy, sm - 1, sd).getDay();
   const endWeekday = new Date(ey, em - 1, ed).getDay();
-  // Friday = 5
+  // Saturday = 6, Friday = 5
+  if (startWeekday !== 6) {
+    return {
+      ok: false,
+      error: "Period start must be a Saturday.",
+    };
+  }
   if (endWeekday !== 5) {
     return {
       ok: false,
@@ -437,7 +445,6 @@ export async function updatePayPeriod(input: {
     };
   }
 
-  const [sy, sm, sd] = payPeriodStart.split("-").map(Number);
   const startUtc = Date.UTC(sy, sm - 1, sd);
   const endUtc = Date.UTC(ey, em - 1, ed);
   const lengthDays = Math.round((endUtc - startUtc) / 86_400_000) + 1;
@@ -452,7 +459,7 @@ export async function updatePayPeriod(input: {
     return {
       ok: false,
       error:
-        "Period length must be a whole number of weeks (7, 14, 21, or 28 days) so period end stays Friday.",
+        "Period length must be a whole number of weeks (7, 14, 21, or 28 days) so periods stay Saturday–Friday.",
     };
   }
 
@@ -470,7 +477,7 @@ export async function updatePayPeriod(input: {
   return { ok: true };
 }
 
-/** @deprecated Prefer updatePayPeriod. */
+/** @deprecated Prefer updatePayPeriod. Accepts a Thursday deposit and derives Sat→Fri. */
 export async function updateNextPayDate(input: {
   nextPayDate: string | null;
 }): Promise<ActionResult> {
@@ -478,14 +485,28 @@ export async function updateNextPayDate(input: {
   if (!raw) {
     return updatePayPeriod({ payPeriodStart: null, nextPayDate: null });
   }
-  const endParsed = parseLocalDateInput(raw, "pay date");
-  if (!endParsed.ok) return endParsed;
-  const [y, m, d] = endParsed.value.split("-").map(Number);
-  const start = new Date(y, m - 1, d - 13);
-  const payPeriodStart = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, "0")}-${String(start.getDate()).padStart(2, "0")}`;
+  const depositParsed = parseLocalDateInput(raw, "deposit date");
+  if (!depositParsed.ok) return depositParsed;
+
+  const [y, m, d] = depositParsed.value.split("-").map(Number);
+  const depositWeekday = new Date(y, m - 1, d).getDay();
+  if (depositWeekday !== 4) {
+    return { ok: false, error: "Deposit day must be a Thursday." };
+  }
+
+  // Deposit Thu → period end Fri (−6) → biweekly start Sat (−13 from end).
+  const endDate = new Date(y, m - 1, d - 6);
+  const startDate = new Date(
+    endDate.getFullYear(),
+    endDate.getMonth(),
+    endDate.getDate() - 13,
+  );
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const nextPayDate = `${endDate.getFullYear()}-${pad(endDate.getMonth() + 1)}-${pad(endDate.getDate())}`;
+  const payPeriodStart = `${startDate.getFullYear()}-${pad(startDate.getMonth() + 1)}-${pad(startDate.getDate())}`;
   return updatePayPeriod({
     payPeriodStart,
-    nextPayDate: endParsed.value,
+    nextPayDate,
   });
 }
 

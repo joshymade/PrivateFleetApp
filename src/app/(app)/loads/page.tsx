@@ -3,8 +3,8 @@ import { redirect } from "next/navigation";
 import { LoadCard } from "@/components/loads/load-card";
 import { LoadListRow } from "@/components/loads/load-list-row";
 import { LoadsListExpand } from "@/components/loads/loads-list-expand";
+import { LoadsMonthCharts } from "@/components/loads/loads-month-charts";
 import { LoadsMonthTotals } from "@/components/loads/loads-month-totals";
-import { LoadsWeekCharts } from "@/components/loads/loads-week-charts";
 import { MonthNavigator } from "@/components/loads/month-navigator";
 import { pageTitleClassName } from "@/components/ui/page-title";
 import {
@@ -21,7 +21,7 @@ import {
 } from "@/lib/loads/date";
 import { loadsHref } from "@/lib/loads/href";
 import {
-  buildWorkWeekCharts,
+  buildMonthChartDays,
   getLatestAdp,
   getLoadsForMonth,
   getMonthWorkedMinutes,
@@ -91,7 +91,7 @@ export default async function LoadsPage({
     Number.isFinite(latestAdp) ? latestAdp : null,
     monthWorkedMinutes,
   );
-  const weekCharts = buildWorkWeekCharts(monthLoads, weekStartDay);
+  const monthChartDays = buildMonthChartDays(monthLoads, year, month);
 
   /**
    * UX choice: current month defaults to the 5 most recent loads with a
@@ -114,7 +114,7 @@ export default async function LoadsPage({
         <div>
           <h1 className={pageTitleClassName}>Loads</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Your private load history, work-week charts, and month totals.
+            Your private load history, month charts, and totals.
           </p>
         </div>
         {canManage ? (
@@ -133,9 +133,9 @@ export default async function LoadsPage({
 
       <section className="space-y-3">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-          Work-week charts
+          Month charts
         </h2>
-        <LoadsWeekCharts weeks={weekCharts} />
+        <LoadsMonthCharts days={monthChartDays} />
       </section>
 
       <section className="space-y-4">

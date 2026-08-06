@@ -1,6 +1,6 @@
 import Link from "next/link";
-import type { ReactNode } from "react";
 import { CompleteLoadButton } from "@/components/loads/complete-load-button";
+import { DailyEarningsRemindersProvider } from "@/components/loads/daily-earnings-reminders";
 import { DailyPayDayEditor } from "@/components/loads/daily-pay-day-editor";
 import { DepartStopButton } from "@/components/loads/depart-stop-button";
 import { ShiftPunchDayEditor } from "@/components/loads/shift-punch-day-editor";
@@ -8,6 +8,7 @@ import { StopSealField } from "@/components/loads/stop-seal-field";
 import { StopStoreCountsField } from "@/components/loads/stop-store-counts-field";
 import { StopTrailerField } from "@/components/loads/stop-trailer-field";
 import { MaskedMoney } from "@/components/ui/masked-money";
+import type { EarningsDaySnapshot } from "@/lib/loads/daily-earnings-reminder";
 import {
   drivenMiles,
   formatCardMonthDay,
@@ -52,10 +53,6 @@ export type WorkStatsSummary = {
   periodEarnings: number;
   periodDrivenMiles: number;
   periodWorkedMinutes: number;
-  monthLoads: number;
-  monthEarnings: number;
-  monthDrivenMiles: number;
-  monthWorkedMinutes: number;
 };
 
 function milesLabel(miles: number): string {
@@ -242,6 +239,9 @@ export function WorkWeekHome({
   canManage,
   periodMode = false,
   needsPayDate = false,
+  periodEnd = null,
+  periodStart = null,
+  reminderDays = null,
 }: {
   weekLabel: string;
   days: WorkWeekDaySummary[];
@@ -255,6 +255,15 @@ export function WorkWeekHome({
   periodMode?: boolean;
   /** Prompt driver to set pay period start/end on Account. */
   needsPayDate?: boolean;
+  /** Inclusive start of the visible period / week. */
+  periodStart?: string | null;
+  /** Friday end of the current pay period (session dismiss key). */
+  periodEnd?: string | null;
+  /**
+   * Optional lookback + period snapshots for earnings reminders
+   * (prior completed punch days outside the visible grid).
+   */
+  reminderDays?: EarningsDaySnapshot[] | null;
 }) {
   const currentStopInfo = activeLoad
     ? resolveCurrentStop(activeLoad.load_stops)
@@ -277,7 +286,43 @@ export function WorkWeekHome({
     currentTruckNumber?.trim() ||
     null;
 
+  /** Projected period total: day-card load pay (incl. active) + daily pay. */
+  const periodProjectedEarnings = days.reduce(
+    (sum, day) => sum + (day.totalEarnings ?? 0),
+    0,
+  );
+
+  const daysWorked = days.filter(
+    (day) =>
+      day.loadCount > 0 ||
+      day.dailyPayAmount != null ||
+      (day.punchStart != null && day.punchEnd != null),
+  ).length;
+
+  const hoursWorked = stats.periodWorkedMinutes / 60;
+  const earningsPerHour =
+    hoursWorked > 0 ? periodProjectedEarnings / hoursWorked : null;
+
+  const earningsReminderDays: EarningsDaySnapshot[] =
+    reminderDays ??
+    days.map((day) => ({
+      date: day.date,
+      isPast: day.isPast,
+      loadCount: day.loadCount,
+      dailyPayAmount: day.dailyPayAmount,
+      punchStart: day.punchStart,
+      punchEnd: day.punchEnd,
+    }));
+
+  const statsScope = periodMode ? "This pay period" : "This work week";
+
   return (
+    <DailyEarningsRemindersProvider
+      days={earningsReminderDays}
+      periodStart={periodStart}
+      periodEnd={periodEnd}
+      enabled={canManage}
+    >
     <div className="space-y-4">
       {canManage ? (
         <Link
@@ -481,8 +526,8 @@ export function WorkWeekHome({
         <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-950 dark:border-emerald-800/70 dark:bg-emerald-950/40 dark:text-emerald-50">
           <p className="font-medium">Set your pay period</p>
           <p className="mt-1 text-sm text-emerald-900/80 dark:text-emerald-100/80">
-            Unlock the pay-period view on Home. Periods end Friday; deposit
-            shows on Thursday.{" "}
+            Unlock the pay-period view on Home. Pick your next deposit
+            Thursday; work periods run Saturday–Friday.{" "}
             <Link
               href="/account"
               className="font-semibold underline underline-offset-2"
@@ -520,6 +565,61 @@ export function WorkWeekHome({
           </div>
         </div>
 
+        <div className="overflow-hidden rounded-2xl border border-border bg-card">
+          <div className="border-b border-border bg-muted/40 px-4 py-3.5">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+              {periodMode ? "Period earnings" : "Week earnings"}
+            </p>
+            <p className="mt-1 text-2xl font-semibold tabular-nums tracking-tight text-foreground">
+              <MaskedMoney amount={periodProjectedEarnings} />
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Load pay + daily pay · {statsScope}
+            </p>
+          </div>
+          <ul className="grid grid-cols-2 divide-x divide-y divide-border sm:grid-cols-4 sm:divide-y-0">
+            <li className="min-w-0 px-3.5 py-3">
+              <PeriodStat
+                label="Days worked"
+                value={String(daysWorked)}
+                hint="Loads, pay, or punches"
+              />
+            </li>
+            <li className="min-w-0 px-3.5 py-3">
+              <PeriodStat
+                label="Loads"
+                value={String(stats.periodLoads)}
+                hint="Completed"
+              />
+            </li>
+            <li className="min-w-0 px-3.5 py-3">
+              <PeriodStat
+                label="Hours"
+                value={formatDurationHm(stats.periodWorkedMinutes)}
+                hint="Shift punches"
+              />
+            </li>
+            <li className="min-w-0 px-3.5 py-3">
+              <PeriodStat
+                label="Miles"
+                value={milesLabel(stats.periodDrivenMiles)}
+                hint="Driven (odometer)"
+              />
+            </li>
+          </ul>
+          {earningsPerHour != null ? (
+            <div className="flex items-baseline justify-between gap-3 border-t border-border px-4 py-2.5">
+              <p className="text-xs text-muted-foreground">
+                Effective rate (earnings ÷ punched hours)
+              </p>
+              <p className="text-sm font-semibold tabular-nums text-brand">
+                <MaskedMoney amount={earningsPerHour} />
+                <span className="font-medium text-muted-foreground">/hr</span>
+              </p>
+            </div>
+          ) : null}
+        </div>
+
         <ul className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
           {days.map((day) => (
             <li key={day.date} className="min-w-0">
@@ -528,95 +628,32 @@ export function WorkWeekHome({
           ))}
         </ul>
       </section>
-
-      <section className="space-y-3">
-        <h2 className="px-0.5 text-base font-semibold text-foreground">
-          Work Stats
-        </h2>
-        <ul className="grid grid-cols-2 gap-2.5">
-          <li className="min-w-0">
-            <WorkStatCard
-              label="Completed loads"
-              value={String(stats.periodLoads)}
-              hint={periodMode ? "This pay period" : "This week"}
-            />
-          </li>
-          <li className="min-w-0">
-            <WorkStatCard
-              label="Completed loads"
-              value={String(stats.monthLoads)}
-              hint="This month"
-            />
-          </li>
-          <li className="min-w-0">
-            <WorkStatCard
-              label={periodMode ? "Period earnings" : "Week earnings"}
-              value={<MaskedMoney amount={stats.periodEarnings} />}
-              hint="Loads + daily pay"
-            />
-          </li>
-          <li className="min-w-0">
-            <WorkStatCard
-              label="Month earnings"
-              value={<MaskedMoney amount={stats.monthEarnings} />}
-              hint="Loads + daily pay"
-            />
-          </li>
-          <li className="min-w-0">
-            <WorkStatCard
-              label={periodMode ? "Period miles" : "Week miles"}
-              value={milesLabel(stats.periodDrivenMiles)}
-              hint="Driven (odometer)"
-            />
-          </li>
-          <li className="min-w-0">
-            <WorkStatCard
-              label="Month miles"
-              value={milesLabel(stats.monthDrivenMiles)}
-              hint="Driven (odometer)"
-            />
-          </li>
-          <li className="min-w-0">
-            <WorkStatCard
-              label={periodMode ? "Period hours" : "Week hours"}
-              value={formatDurationHm(stats.periodWorkedMinutes)}
-              hint="Punches (H:MM)"
-            />
-          </li>
-          <li className="min-w-0">
-            <WorkStatCard
-              label="Month hours"
-              value={formatDurationHm(stats.monthWorkedMinutes)}
-              hint="Punches (H:MM)"
-            />
-          </li>
-        </ul>
-      </section>
     </div>
+    </DailyEarningsRemindersProvider>
   );
 }
 
-function WorkStatCard({
+function PeriodStat({
   label,
   value,
   hint,
 }: {
   label: string;
-  value: ReactNode;
+  value: string;
   hint?: string;
 }) {
   return (
-    <article className="flex h-full flex-col rounded-2xl border border-border bg-card px-3 py-3">
-      <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+    <div className="min-w-0">
+      <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
         {label}
       </p>
       <p className="mt-1 truncate text-lg font-semibold tabular-nums text-foreground">
         {value}
       </p>
       {hint ? (
-        <p className="mt-0.5 text-[11px] text-muted-foreground">{hint}</p>
+        <p className="mt-0.5 truncate text-[11px] text-muted-foreground">{hint}</p>
       ) : null}
-    </article>
+    </div>
   );
 }
 

@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { useDailyEarningsReminders } from "@/components/loads/daily-earnings-reminders";
 import {
   deleteDailyPay,
   upsertDailyPay,
@@ -18,12 +19,22 @@ export function DailyPayDayEditor({
   canEdit: boolean;
 }) {
   const router = useRouter();
+  const earningsReminders = useDailyEarningsReminders();
   const [open, setOpen] = useState(false);
   const [value, setValue] = useState(
     amount != null ? String(amount) : "",
   );
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+
+  useEffect(() => {
+    if (!canEdit || !earningsReminders) return;
+    return earningsReminders.registerDailyPayOpener(workDate, () => {
+      setValue(amount != null ? String(amount) : "");
+      setError(null);
+      setOpen(true);
+    });
+  }, [amount, canEdit, earningsReminders, workDate]);
 
   if (!canEdit) {
     return (
@@ -37,6 +48,7 @@ export function DailyPayDayEditor({
     return (
       <button
         type="button"
+        data-daily-pay-date={workDate}
         onClick={() => {
           setValue(amount != null ? String(amount) : "");
           setError(null);
@@ -93,6 +105,7 @@ export function DailyPayDayEditor({
 
   return (
     <form
+      data-daily-pay-date={workDate}
       onSubmit={onSave}
       className="mt-auto space-y-1.5 rounded-xl border border-border bg-background/80 px-2 py-2 dark:bg-background/30"
     >

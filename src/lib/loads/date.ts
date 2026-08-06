@@ -231,20 +231,57 @@ export function weekdayOf(dateStr: string): number {
 /** Checks are deposited on Thursday (week-view pay icon). */
 export const DEPOSIT_WEEKDAY = 4;
 
+/** Pay periods start on Saturday. */
+export const PERIOD_START_WEEKDAY = 6;
+
 /** Pay periods end on Friday. */
 export const PERIOD_END_WEEKDAY = 5;
+
+/** Default biweekly work window (Sat→Fri inclusive). */
+export const DEFAULT_PAY_PERIOD_LENGTH_DAYS = 14;
+
+/**
+ * Days from Friday period end to Thursday deposit in the following week.
+ * Example: period ends Fri Jul 24 → deposit Thu Jul 30 (+6).
+ */
+export const PERIOD_END_TO_DEPOSIT_DAYS = 6;
 
 /** @deprecated Use {@link DEPOSIT_WEEKDAY}. */
 export const PAYDAY_WEEKDAY = DEPOSIT_WEEKDAY;
 
 /**
- * Deposit (pay icon) day for a period ending on `periodEnd`.
- * Thursday of the same calendar week as the period end (Friday end → prior day).
+ * Deposit day for a period ending on `periodEnd`.
+ * Always the Thursday after that Friday (period end + 6), not the Thursday
+ * inside the ending week.
  */
 export function depositDayForPeriodEnd(periodEnd: string): string {
-  const wd = weekdayOf(periodEnd);
-  const back = (wd - DEPOSIT_WEEKDAY + 7) % 7;
-  return addCalendarDays(periodEnd, -back);
+  return addCalendarDays(periodEnd, PERIOD_END_TO_DEPOSIT_DAYS);
+}
+
+/**
+ * Friday period end implied by a Thursday deposit (deposit − 6).
+ */
+export function periodEndForDepositDay(depositDate: string): string {
+  return addCalendarDays(depositDate, -PERIOD_END_TO_DEPOSIT_DAYS);
+}
+
+/**
+ * Inclusive Sat→Fri work window ending on the Friday before `depositDate`.
+ * Default length is 14 days; longer multi-week windows stay Sat start / Fri end
+ * when `lengthDays` is a multiple of 7.
+ */
+export function payPeriodFromDepositDay(
+  depositDate: string,
+  lengthDays: number = DEFAULT_PAY_PERIOD_LENGTH_DAYS,
+): { start: string; end: string; lengthDays: number; payDay: string } {
+  const end = periodEndForDepositDay(depositDate);
+  const start = addCalendarDays(end, -(lengthDays - 1));
+  return {
+    start,
+    end,
+    lengthDays,
+    payDay: depositDate,
+  };
 }
 
 /** Inclusive day count from start through end. */
@@ -288,8 +325,8 @@ export type PayPeriod = {
   /** YYYY-MM-DD dates from start through end (inclusive). */
   days: string[];
   /**
-   * Deposit / pay-icon day (Thursday of the week containing period end).
-   * Not the same as `end` (Friday).
+   * Deposit day for this period (Thursday after Friday end, typically +6).
+   * Falls outside the work window.
    */
   payDay: string;
   /** Inclusive length in days (from seed). */
@@ -297,10 +334,10 @@ export type PayPeriod = {
 };
 
 /**
- * Current pay period from a driver-seeded start/end range.
+ * Current pay period from a driver-seeded Sat→Fri range.
  * Advances contiguous periods of the same length until `today` falls in one
  * (or the next upcoming period if `today` is before the seed).
- * Period end is Friday; `payDay` is the Thursday deposit in that end week.
+ * `payDay` is the Thursday deposit after that Friday end (+6).
  */
 export function currentPayPeriod(
   today: string,
@@ -338,15 +375,23 @@ export function currentPayPeriod(
 }
 
 /**
+ * Deposit that lands inside a Sat-start period (paycheck for the prior period):
+ * Thursday of the period's first week = start + 5.
+ */
+export function depositDayInPeriod(periodStart: string): string {
+  return addCalendarDays(periodStart, 5);
+}
+
+/**
  * @deprecated Prefer seed start/end via {@link currentPayPeriod}.
- * Legacy: 14-day window ending on a Friday period-end anchor.
+ * Legacy: 14-day Sat→Fri window from a Friday period-end anchor.
  */
 export function currentPayPeriodFromAnchor(
   today: string,
   anchorPeriodEnd: string,
 ): PayPeriod {
   const end = upcomingPayDay(today, anchorPeriodEnd, 14);
-  const start = addCalendarDays(end, -13);
+  const start = addCalendarDays(end, -(DEFAULT_PAY_PERIOD_LENGTH_DAYS - 1));
   return currentPayPeriod(today, start, end);
 }
 

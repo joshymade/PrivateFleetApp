@@ -229,7 +229,7 @@ export default async function AccountPage() {
 
           <AccountSettingsSection
             title="Pay period"
-            description="Set your current (or next) pay period start and end. Periods end on Friday; checks deposit on Thursday (shown with the $ icon on Home). Later periods advance automatically with the same length."
+            description="Pick your next deposit Thursday. We calculate the Saturday–Friday work window (usually biweekly). Deposit is the Thursday after the period ends — shown with the $ icon on Home. Later periods advance automatically."
           >
             <PayPeriodSettings
               payPeriodStart={profile?.pay_period_start ?? null}

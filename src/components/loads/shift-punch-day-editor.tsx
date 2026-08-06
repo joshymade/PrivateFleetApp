@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { useDailyEarningsReminders } from "@/components/loads/daily-earnings-reminders";
 import {
   deleteShiftPunch,
   upsertShiftPunch,
@@ -28,6 +29,7 @@ export function ShiftPunchDayEditor({
   compact?: boolean;
 }) {
   const router = useRouter();
+  const earningsReminders = useDailyEarningsReminders();
   const [open, setOpen] = useState(false);
   const [start, setStart] = useState(toHtmlTime(startTime));
   const [end, setEnd] = useState(toHtmlTime(endTime));
@@ -106,16 +108,25 @@ export function ShiftPunchDayEditor({
   function onSave(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    const nextStart = start || null;
+    const nextEnd = end || null;
     startTransition(async () => {
       const result = await upsertShiftPunch({
         workDate,
-        startTime: start || null,
-        endTime: end || null,
+        startTime: nextStart,
+        endTime: nextEnd,
       });
       if (!result.ok) {
         setError(result.error);
         return;
       }
+      earningsReminders?.notifyPunchSaved({
+        workDate,
+        prevStart: startTime,
+        prevEnd: endTime,
+        nextStart,
+        nextEnd,
+      });
       setOpen(false);
       router.refresh();
     });

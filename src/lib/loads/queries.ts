@@ -8,14 +8,7 @@ import type {
   Profile,
   ShiftPunch,
 } from "@/types/database";
-import {
-  drivenMiles,
-  formatWeekLabel,
-  monthBounds,
-  todayDateString,
-  workWeekDays,
-  workWeekStart,
-} from "./date";
+import { drivenMiles, monthBounds, todayDateString } from "./date";
 import { shiftDurationMinutes } from "./shift-time";
 
 export type LoadWithStops = Load & {
@@ -37,19 +30,15 @@ export type MonthLoadTotals = {
   workedMinutes: number;
 };
 
-export type WorkWeekChartDay = {
+/** One calendar day in a month chart (completed loads only). */
+export type MonthChartDay = {
   date: string;
+  /** Day-of-month label for narrow X axes (e.g. "1", "15"). */
   label: string;
   earnings: number;
   driven: number;
   paid: number;
   loads: number;
-};
-
-export type WorkWeekChartSeries = {
-  weekStart: string;
-  weekLabel: string;
-  days: WorkWeekChartDay[];
 };
 
 export async function getSessionProfile(): Promise<{
@@ -503,54 +492,54 @@ export function summarizeMonthLoads(
   };
 }
 
-/** Work-week chart series for loads in a month, keyed by driver's week_start_day. */
-export function buildWorkWeekCharts(
+/**
+ * Daily chart series for every calendar day in the month.
+ * Aggregates completed loads only (matches month totals).
+ */
+export function buildMonthChartDays(
   loads: LoadWithStops[],
-  weekStartDay: number,
-): WorkWeekChartSeries[] {
-  const byWeek = new Map<string, LoadWithStops[]>();
+  year: number,
+  month: number,
+): MonthChartDay[] {
+  const { start, end } = monthBounds(year, month);
+  const byDate = new Map<
+    string,
+    { earnings: number; driven: number; paid: number; loads: number }
+  >();
+
   for (const load of loads) {
     if (load.status !== "completed") continue;
-    const key = workWeekStart(load.load_date, weekStartDay);
-    const list = byWeek.get(key) ?? [];
-    list.push(load);
-    byWeek.set(key, list);
+    if (load.load_date < start || load.load_date > end) continue;
+
+    const bucket = byDate.get(load.load_date) ?? {
+      earnings: 0,
+      driven: 0,
+      paid: 0,
+      loads: 0,
+    };
+    if (load.pay_amount != null) bucket.earnings += Number(load.pay_amount);
+    const d = drivenMiles(load.starting_mileage, load.ending_mileage);
+    if (d != null) bucket.driven += d;
+    if (load.paid_miles != null) bucket.paid += Number(load.paid_miles);
+    bucket.loads += 1;
+    byDate.set(load.load_date, bucket);
   }
 
-  return [...byWeek.entries()]
-    .sort(([a], [b]) => b.localeCompare(a))
-    .map(([weekStart, weekLoads]) => {
-      const days = workWeekDays(weekStart).map((date) => {
-        const dayLoads = weekLoads.filter((l) => l.load_date === date);
-        let earnings = 0;
-        let driven = 0;
-        let paid = 0;
-        for (const load of dayLoads) {
-          if (load.pay_amount != null) earnings += Number(load.pay_amount);
-          const d = drivenMiles(load.starting_mileage, load.ending_mileage);
-          if (d != null) driven += d;
-          if (load.paid_miles != null) paid += Number(load.paid_miles);
-        }
-        const [y, m, d] = date.split("-").map(Number);
-        const label = new Date(y, m - 1, d).toLocaleDateString(undefined, {
-          weekday: "short",
-        });
-        return {
-          date,
-          label,
-          earnings,
-          driven,
-          paid,
-          loads: dayLoads.length,
-        };
-      });
-
-      return {
-        weekStart,
-        weekLabel: formatWeekLabel(weekStart),
-        days,
-      };
+  const lastDay = Number(end.slice(-2));
+  const days: MonthChartDay[] = [];
+  for (let day = 1; day <= lastDay; day++) {
+    const date = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+    const bucket = byDate.get(date);
+    days.push({
+      date,
+      label: String(day),
+      earnings: bucket?.earnings ?? 0,
+      driven: bucket?.driven ?? 0,
+      paid: bucket?.paid ?? 0,
+      loads: bucket?.loads ?? 0,
     });
+  }
+  return days;
 }
 
 export {
