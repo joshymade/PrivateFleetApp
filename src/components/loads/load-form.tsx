@@ -2,7 +2,7 @@
 
 import { useActionState, useState } from "react";
 import Link from "next/link";
-import { Plus } from "lucide-react";
+import { Box, MoveRight, Plus } from "lucide-react";
 import { StopTrailerField } from "@/components/loads/stop-trailer-field";
 import { ClickableTooltip } from "@/components/ui/clickable-tooltip";
 import {
@@ -33,6 +33,9 @@ type StopDraft = {
   stop_type: LoadStopType;
   stop_name: string;
   pickup_number: string;
+  seal_record: string;
+  pallet_count: string;
+  position_count: string;
   trailer_number: string;
 };
 
@@ -41,6 +44,9 @@ function emptyStop(): StopDraft {
     stop_type: "store",
     stop_name: "",
     pickup_number: "",
+    seal_record: "",
+    pallet_count: "",
+    position_count: "",
     trailer_number: "",
   };
 }
@@ -78,6 +84,15 @@ export function LoadForm({
             stop_type: s.stop_type ?? "store",
             stop_name: s.stop_name,
             pickup_number: s.pickup_number ?? "",
+            seal_record: s.seal_record ?? "",
+            pallet_count:
+              s.stop_type === "store" && s.pallet_count != null
+                ? String(s.pallet_count)
+                : "",
+            position_count:
+              s.stop_type === "store" && s.position_count != null
+                ? String(s.position_count)
+                : "",
             trailer_number: s.trailer_number ?? "",
           }))
       : [emptyStop()],
@@ -86,7 +101,12 @@ export function LoadForm({
   function updateStop(index: number, patch: Partial<StopDraft>) {
     setStopRows((rows) => {
       const next = [...rows];
-      next[index] = { ...next[index], ...patch };
+      const merged = { ...next[index], ...patch };
+      if (patch.stop_type && patch.stop_type !== "store") {
+        merged.pallet_count = "";
+        merged.position_count = "";
+      }
+      next[index] = merged;
       return next;
     });
   }
@@ -303,7 +323,10 @@ export function LoadForm({
 
             <label className="block text-sm">
               <span className="mb-1 block font-medium text-foreground">
-                Pickup number
+                Pickup number{" "}
+                <span className="font-normal text-muted-foreground">
+                  (optional)
+                </span>
               </span>
               <input
                 name="pickup_number"
@@ -315,6 +338,77 @@ export function LoadForm({
                 className="min-h-11 w-full rounded-lg border border-border bg-background px-3 text-base text-foreground outline-none placeholder:text-muted-foreground focus:border-ring focus:ring-2 focus:ring-ring/30"
               />
             </label>
+
+            <label className="block text-sm">
+              <span className="mb-1 block font-medium text-foreground">
+                Seal record{" "}
+                <span className="font-normal text-muted-foreground">
+                  (optional)
+                </span>
+              </span>
+              <input
+                name="seal_record"
+                placeholder="Seal #"
+                value={row.seal_record}
+                onChange={(e) =>
+                  updateStop(index, { seal_record: e.target.value })
+                }
+                autoComplete="off"
+                className="min-h-11 w-full rounded-lg border border-border bg-background px-3 text-base text-foreground outline-none placeholder:text-muted-foreground focus:border-ring focus:ring-2 focus:ring-ring/30"
+              />
+            </label>
+
+            {row.stop_type === "store" ? (
+              <div className="space-y-1.5">
+                <span className="block text-sm font-medium text-foreground">
+                  Store counts{" "}
+                  <span className="font-normal text-muted-foreground">
+                    (optional)
+                  </span>
+                </span>
+                <div className="grid grid-cols-2 gap-2">
+                  <label className="block text-sm">
+                    <span className="mb-1 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                      <Box className="size-3.5 shrink-0" aria-hidden />
+                      Pallets
+                    </span>
+                    <input
+                      name="pallet_count"
+                      inputMode="numeric"
+                      placeholder="0"
+                      value={row.pallet_count}
+                      onChange={(e) =>
+                        updateStop(index, { pallet_count: e.target.value })
+                      }
+                      autoComplete="off"
+                      className="min-h-11 w-full rounded-lg border border-border bg-background px-3 text-base text-foreground tabular-nums outline-none placeholder:text-muted-foreground focus:border-ring focus:ring-2 focus:ring-ring/30"
+                    />
+                  </label>
+                  <label className="block text-sm">
+                    <span className="mb-1 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                      <MoveRight className="size-3.5 shrink-0" aria-hidden />
+                      Positions
+                    </span>
+                    <input
+                      name="position_count"
+                      inputMode="numeric"
+                      placeholder="0"
+                      value={row.position_count}
+                      onChange={(e) =>
+                        updateStop(index, { position_count: e.target.value })
+                      }
+                      autoComplete="off"
+                      className="min-h-11 w-full rounded-lg border border-border bg-background px-3 text-base text-foreground tabular-nums outline-none placeholder:text-muted-foreground focus:border-ring focus:ring-2 focus:ring-ring/30"
+                    />
+                  </label>
+                </div>
+              </div>
+            ) : (
+              <>
+                <input type="hidden" name="pallet_count" value="" />
+                <input type="hidden" name="position_count" value="" />
+              </>
+            )}
 
             {row.id ? (
               <>

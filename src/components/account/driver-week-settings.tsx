@@ -68,13 +68,17 @@ export function DriverWeekSettings({
   return (
     <div id="truck-settings" className="flex flex-col gap-4 scroll-mt-24">
       <div>
-        <p className="text-sm font-medium text-foreground">
+        <label
+          htmlFor="current-truck-number"
+          className="text-sm font-medium text-foreground"
+        >
           Current truck number
-        </p>
-        <p className="mt-1 text-xs text-muted-foreground">
+        </label>
+        <p id="current-truck-number-hint" className="mt-1 text-xs text-muted-foreground">
           Used on each new load until you change it. Leave blank to clear.
         </p>
         <input
+          id="current-truck-number"
           value={truckNumber}
           onChange={(e) => {
             setTruckNumber(formatTractorNumber(e.target.value));
@@ -84,22 +88,30 @@ export function DriverWeekSettings({
           autoComplete="off"
           placeholder={TRACTOR_NUMBER_PLACEHOLDER}
           maxLength={7}
+          aria-describedby="current-truck-number-hint"
           className="mt-2 min-h-11 w-full rounded-xl border border-border bg-background px-3 text-base text-foreground outline-none placeholder:text-muted-foreground focus:border-ring focus:ring-2 focus:ring-ring/30"
         />
       </div>
 
       <div>
-        <p className="text-sm font-medium text-foreground">Start of week</p>
-        <p className="mt-1 text-xs text-muted-foreground">
+        <label
+          htmlFor="week-start-day"
+          className="text-sm font-medium text-foreground"
+        >
+          Start of week
+        </label>
+        <p id="week-start-day-hint" className="mt-1 text-xs text-muted-foreground">
           Your work week cards begin on this day (for example Friday if that is
           your Monday).
         </p>
         <select
+          id="week-start-day"
           value={startDay}
           onChange={(e) => {
             setStartDay(Number(e.target.value));
             setSaved(false);
           }}
+          aria-describedby="week-start-day-hint"
           className="mt-2 min-h-11 w-full rounded-xl border border-border bg-background px-3 text-base text-foreground"
         >
           {WEEKDAY_LABELS.map((label, i) => (
@@ -110,13 +122,17 @@ export function DriverWeekSettings({
         </select>
       </div>
 
-      <div>
-        <p className="text-sm font-medium text-foreground">Off days</p>
-        <p className="mt-1 text-xs text-muted-foreground">
+      <fieldset>
+        <legend className="text-sm font-medium text-foreground">Off days</legend>
+        <p id="off-days-hint" className="mt-1 text-xs text-muted-foreground">
           Mark your usual days off. You can still log loads on those days for
           overtime.
         </p>
-        <div className="mt-2 flex flex-wrap gap-2">
+        <div
+          className="mt-2 flex flex-wrap gap-2"
+          role="group"
+          aria-describedby="off-days-hint"
+        >
           {WEEKDAY_LABELS.map((label, i) => {
             const selected = offs.includes(i);
             return (
@@ -124,6 +140,7 @@ export function DriverWeekSettings({
                 key={label}
                 type="button"
                 onClick={() => toggleOff(i)}
+                aria-pressed={selected}
                 className={`min-h-10 rounded-xl px-3 text-sm font-medium ${
                   selected
                     ? "bg-brand text-white dark:text-background"
@@ -135,7 +152,7 @@ export function DriverWeekSettings({
             );
           })}
         </div>
-      </div>
+      </fieldset>
 
       {error ? (
         <p className="text-sm text-destructive" role="alert">

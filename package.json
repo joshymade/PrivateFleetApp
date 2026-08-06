@@ -30,7 +30,6 @@
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "recharts": "^2.15.0",
-    "resend": "^6.17.2",
     "serwist": "^9.5.11",
     "tailwindcss": "^4",
     "typescript": "^5"

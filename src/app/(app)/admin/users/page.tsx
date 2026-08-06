@@ -1,9 +1,13 @@
 import { redirect } from "next/navigation";
 import { AdminCreateUserForm } from "@/components/admin/admin-create-user-form";
+import { AdminRecentMessages } from "@/components/admin/admin-recent-messages";
 import { AdminUsersList } from "@/components/admin/admin-users-list";
 import { pageTitleClassName } from "@/components/ui/page-title";
 import { canAccessAdminUsers, getSessionProfile } from "@/lib/auth/profile";
-import { listAdminUsers } from "@/lib/admin/users";
+import {
+  listAdminUsers,
+  listRecentContactMessages,
+} from "@/lib/admin/users";
 
 export const metadata = { title: "Users" };
 
@@ -13,7 +17,10 @@ export default async function AdminUsersPage() {
     redirect("/account");
   }
 
-  const { users, error } = await listAdminUsers();
+  const [{ users, error }, { items: recentMessages }] = await Promise.all([
+    listAdminUsers(),
+    listRecentContactMessages(),
+  ]);
 
   return (
     <main className="flex flex-col gap-4 p-4 pb-8 pt-2">
@@ -30,6 +37,16 @@ export default async function AdminUsersPage() {
       </div>
 
       <AdminCreateUserForm />
+
+      <section className="flex flex-col gap-2">
+        <h2 className="text-sm font-semibold text-foreground">
+          Recent messages
+        </h2>
+        <p className="text-xs text-muted-foreground">
+          User contact threads — open to reply from their profile.
+        </p>
+        <AdminRecentMessages items={recentMessages} />
+      </section>
 
       {error ? (
         <p className="text-sm text-destructive" role="alert">

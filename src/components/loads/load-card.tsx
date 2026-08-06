@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { LoadLabel } from "@/components/loads/load-label";
+import { MaskedMoney } from "@/components/ui/masked-money";
 import { drivenMiles, formatShortDate } from "@/lib/loads/date";
 import { RouteSnippet } from "@/components/loads/route-snippet";
 import {
@@ -55,7 +56,7 @@ export function LoadCard({ load }: { load: LoadWithStops }) {
           <div>
             <dt className="text-muted-foreground">Pay</dt>
             <dd className="font-medium text-foreground">
-              ${Number(load.pay_amount).toFixed(2)}
+              <MaskedMoney amount={Number(load.pay_amount)} />
             </dd>
           </div>
         ) : null}

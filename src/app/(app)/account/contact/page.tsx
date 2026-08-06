@@ -55,11 +55,10 @@ export default async function AccountContactPage() {
         <h1 className={pageTitleClassName}>Contact</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           Message Admin about driver info changes, app issues, or feature
-          suggestions. Replies appear in Inbox.
+          suggestions. Replies appear in Inbox — no email required.
         </p>
       </div>
       <ContactTabs
-        defaultEmail={session.email ?? ""}
         replies={replies}
         unreadCount={unreadCount}
       />

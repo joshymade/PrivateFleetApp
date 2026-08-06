@@ -1,7 +1,7 @@
 "use client";
 
 import { ChevronLeft, ChevronRight, X } from "lucide-react";
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 
 type ReportPhotoGalleryProps = {
@@ -9,18 +9,22 @@ type ReportPhotoGalleryProps = {
   altPrefix: string;
 };
 
+function subscribeNoop() {
+  return () => {};
+}
+
 export function ReportPhotoGallery({
   urls,
   altPrefix,
 }: ReportPhotoGalleryProps) {
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
-  const [mounted, setMounted] = useState(false);
+  const mounted = useSyncExternalStore(
+    subscribeNoop,
+    () => true,
+    () => false,
+  );
   const closeRef = useRef<HTMLButtonElement>(null);
   const titleId = useId();
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
 
   useEffect(() => {
     if (activeIndex == null) return;

@@ -1,12 +1,14 @@
 import Link from "next/link";
-import { AccountNavCard } from "@/components/account/account-nav-card";
 import { AccountDataResetButtons } from "@/components/account/account-data-reset-buttons";
+import { AccountNavCard } from "@/components/account/account-nav-card";
+import { AccountSettingsSection } from "@/components/account/account-settings-section";
+import { AdminSiteAlertForm } from "@/components/account/admin-site-alert-form";
+import { AdminSplashTextForm } from "@/components/account/admin-splash-text-form";
 import { AdpHistorySection } from "@/components/account/adp-history-section";
 import { DriverWeekSettings } from "@/components/account/driver-week-settings";
-import { NextPayDateSettings } from "@/components/account/next-pay-date-settings";
+import { PayPeriodSettings } from "@/components/account/next-pay-date-settings";
 import { ProfileRegionForm } from "@/components/account/profile-region-form";
 import { SignOutButton } from "@/components/auth/sign-out-button";
-import { AdminContactEmailForm } from "@/components/profile/admin-contact-email-form";
 import { ContactAdminButton } from "@/components/profile/contact-admin-button";
 import { EmailPrivacyHint } from "@/components/profile/email-privacy-hint";
 import { ProfileNameForm } from "@/components/profile/profile-name-form";
@@ -22,8 +24,10 @@ import {
   getSessionProfile,
   isProfileComplete,
 } from "@/lib/auth/profile";
+import { listSiteAlertsForAdmin } from "@/lib/site-alerts";
+import { SPLASH_TEXT_KEY } from "@/lib/splash";
 import { createClient } from "@/lib/supabase/server";
-import type { AdpEntry } from "@/types/database";
+import type { AdpEntry, SiteAlert } from "@/types/database";
 
 export const metadata = {
   title: "Account",
@@ -47,6 +51,8 @@ export default async function AccountPage() {
   let pendingInbox: number | null = null;
   let pendingDeletionRequests: number | null = null;
   let adpEntries: AdpEntry[] = [];
+  let splashTextRaw = "";
+  let siteAlerts: SiteAlert[] = [];
 
   const supabase = await createClient();
   if (canAccessSafetyInbox(role)) {
@@ -58,11 +64,22 @@ export default async function AccountPage() {
   }
 
   if (canAccessAdminUsers(role)) {
-    const { count } = await supabase
-      .from("report_deletion_requests")
-      .select("id", { count: "exact", head: true })
-      .eq("status", "pending");
+    const [{ count }, { data: splashSetting }, alertsResult] =
+      await Promise.all([
+        supabase
+          .from("report_deletion_requests")
+          .select("id", { count: "exact", head: true })
+          .eq("status", "pending"),
+        supabase
+          .from("app_settings")
+          .select("value")
+          .eq("key", SPLASH_TEXT_KEY)
+          .maybeSingle(),
+        listSiteAlertsForAdmin(),
+      ]);
     pendingDeletionRequests = count ?? 0;
+    splashTextRaw = splashSetting?.value ?? "";
+    siteAlerts = alertsResult.alerts;
   }
 
   if (role === "driver" && !setupMode) {
@@ -77,6 +94,8 @@ export default async function AccountPage() {
 
   const weekStartDay = profile?.week_start_day ?? 5;
   const offDays = profile?.off_days ?? [];
+  const showTeamTools =
+    !setupMode && (canAccessSafetyInbox(role) || canAccessAdminUsers(role));
 
   return (
     <main className="flex flex-col gap-8 p-6 pt-3">
@@ -102,10 +121,10 @@ export default async function AccountPage() {
         </div>
       ) : null}
 
-      <section className="flex flex-col gap-4 rounded-2xl border border-border bg-card p-4">
-        <h2 className="text-sm font-semibold text-foreground">
-          {role === "driver" ? "Your Driver Details" : "Details"}
-        </h2>
+      <AccountSettingsSection
+        title={role === "driver" ? "Profile" : "Details"}
+        id="account-section-profile"
+      >
         {showOneEditHint ? (
           <p className="text-xs text-muted-foreground">
             You can change your name or work state one more time. After that,
@@ -128,10 +147,7 @@ export default async function AccountPage() {
           />
         </div>
         {identityLocked ? (
-          <ContactAdminButton
-            defaultEmail={email ?? ""}
-            driverId={profile?.driver_id ?? null}
-          />
+          <ContactAdminButton driverId={profile?.driver_id ?? null} />
         ) : null}
         <dl className="grid gap-3 border-t border-border pt-4 text-sm">
           <div>
@@ -179,123 +195,156 @@ export default async function AccountPage() {
             </div>
           ) : null}
         </dl>
-      </section>
+      </AccountSettingsSection>
 
       {role === "driver" && !setupMode ? (
-        <section className="flex flex-col gap-4 rounded-2xl border border-border bg-card p-4">
-          <h2 className="text-sm font-semibold text-foreground">Settings</h2>
-          <ProfileRegionForm
-            initialRegion={profile?.region ?? null}
-            regionLocked={Boolean(profile?.region_locked)}
-            defaultEmail={email ?? ""}
-            driverId={profile?.driver_id ?? null}
-          />
-          <div className="border-t border-border pt-4">
+        <>
+          <AccountSettingsSection title="Region">
+            {profile?.region_locked ? (
+              <p className="text-xs text-muted-foreground" role="status">
+                Region is locked. Contact Admin to request a change.
+              </p>
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                Choose once. After you save, only Admin can change it.
+              </p>
+            )}
+            <ProfileRegionForm
+              initialRegion={profile?.region ?? null}
+              regionLocked={Boolean(profile?.region_locked)}
+              driverId={profile?.driver_id ?? null}
+            />
+          </AccountSettingsSection>
+
+          <AccountSettingsSection
+            title="Work week"
+            description="Truck number for new loads, when your week starts, and usual days off."
+          >
             <DriverWeekSettings
               weekStartDay={weekStartDay}
               offDays={offDays}
               currentTruckNumber={profile?.current_truck_number ?? null}
             />
-          </div>
-          <div className="border-t border-border pt-4">
-            <NextPayDateSettings
+          </AccountSettingsSection>
+
+          <AccountSettingsSection
+            title="Pay period"
+            description="Set your current (or next) pay period start and end. Periods end on Friday; checks deposit on Thursday (shown with the $ icon on Home). Later periods advance automatically with the same length."
+          >
+            <PayPeriodSettings
+              payPeriodStart={profile?.pay_period_start ?? null}
               nextPayDate={profile?.next_pay_date ?? null}
             />
-          </div>
-          <AccountDataResetButtons />
-          <div className="border-t border-border pt-4">
+          </AccountSettingsSection>
+
+          <AccountSettingsSection
+            title="Average Daily Pay"
+            description="Enter your ADP each biweekly pay period. Latest ADP also shows on Home."
+          >
             <AdpHistorySection entries={adpEntries} />
-          </div>
-        </section>
+          </AccountSettingsSection>
+
+          <AccountSettingsSection
+            title="Data"
+            description="Clear your loads or remove your name from damage reports. Only Admin can permanently delete reports."
+          >
+            <AccountDataResetButtons />
+          </AccountSettingsSection>
+        </>
       ) : null}
 
       {!setupMode ? (
-        <section className="flex flex-col gap-2">
-          <h2 className="text-sm font-semibold text-foreground">More</h2>
-          <AccountNavCard
-            href="/account/notifications"
-            title="My Notifications"
-            description="Unread and recent activity"
-          />
+        <AccountSettingsSection
+          title="Pages"
+          description="Legal and contact."
+          bare
+        >
           <AccountNavCard
             href="/account/legal"
             title="Legal"
-            description="Privacy policy and terms of service"
+            description="FAQ, privacy policy, and terms of service"
           />
           <AccountNavCard
             href="/account/contact"
             title="Contact"
             description="Reach Admin about info, issues, or ideas"
           />
-        </section>
+        </AccountSettingsSection>
       ) : null}
 
       {role === "admin" && !setupMode ? (
-        <section className="flex flex-col gap-3 rounded-2xl border border-border bg-card p-4">
-          <h2 className="text-sm font-semibold text-foreground">
-            Driver contact requests
-          </h2>
-          <AdminContactEmailForm
-            initialEmail={profile?.admin_contact_email ?? null}
-          />
-        </section>
-      ) : null}
-
-      {!setupMode ? (
         <>
-          <section className="flex flex-col gap-3 rounded-2xl border border-border bg-card p-4">
-            <h2 className="text-sm font-semibold text-foreground">Appearance</h2>
-            <p className="text-xs text-muted-foreground">
-              Choose light or dark. Preference is saved on this device.
-            </p>
-            <ThemeToggle />
-          </section>
-
-          {canAccessSafetyInbox(role) || canAccessAdminUsers(role) ? (
-            <ul className="flex flex-col gap-2 text-sm">
-              {canAccessSafetyInbox(role) ? (
-                <li>
-                  <Link
-                    href="/safety/inbox"
-                    className="font-medium text-brand underline-offset-2 hover:underline"
-                  >
-                    {role === "safety" ? "Safety Feed" : "Safety inbox"}
-                    {pendingInbox != null && pendingInbox > 0
-                      ? ` (${pendingInbox} pending)`
-                      : ""}
-                  </Link>
-                </li>
-              ) : null}
-              {canAccessAdminUsers(role) ? (
-                <>
-                  <li>
-                    <Link
-                      href="/admin/users"
-                      className="font-medium text-brand underline-offset-2 hover:underline"
-                    >
-                      Manage users
-                    </Link>
-                  </li>
-                  <li>
-                    <Link
-                      href="/admin/deletion-requests"
-                      className="font-medium text-brand underline-offset-2 hover:underline"
-                    >
-                      Deletion requests
-                      {pendingDeletionRequests != null &&
-                      pendingDeletionRequests > 0
-                        ? ` (${pendingDeletionRequests} pending)`
-                        : ""}
-                    </Link>
-                  </li>
-                </>
-              ) : null}
-            </ul>
-          ) : null}
+          <AccountSettingsSection
+            title="Site notice"
+            description="One-sentence bar at the top of the app on the days you choose (holidays, closings, etc.)."
+          >
+            <AdminSiteAlertForm initialAlerts={siteAlerts} />
+          </AccountSettingsSection>
+          <AccountSettingsSection
+            title="Splash screen"
+            description="Description shown on the welcome splash before Enter. Shared for everyone."
+          >
+            <AdminSplashTextForm initialText={splashTextRaw} />
+          </AccountSettingsSection>
         </>
       ) : null}
 
-      <SignOutButton />
+      {!setupMode ? (
+        <AccountSettingsSection
+          title="Appearance"
+          description="Choose light or dark. Preference is saved on this device."
+        >
+          <ThemeToggle />
+        </AccountSettingsSection>
+      ) : null}
+
+      {showTeamTools ? (
+        <AccountSettingsSection title="Team tools" bare>
+          <ul className="flex flex-col gap-2 text-sm">
+            {canAccessSafetyInbox(role) ? (
+              <li>
+                <Link
+                  href="/safety/inbox"
+                  className="font-medium text-brand underline-offset-2 hover:underline"
+                >
+                  {role === "safety" ? "Safety Feed" : "Safety inbox"}
+                  {pendingInbox != null && pendingInbox > 0
+                    ? ` (${pendingInbox} pending)`
+                    : ""}
+                </Link>
+              </li>
+            ) : null}
+            {canAccessAdminUsers(role) ? (
+              <>
+                <li>
+                  <Link
+                    href="/admin/users"
+                    className="font-medium text-brand underline-offset-2 hover:underline"
+                  >
+                    Manage users
+                  </Link>
+                </li>
+                <li>
+                  <Link
+                    href="/admin/deletion-requests"
+                    className="font-medium text-brand underline-offset-2 hover:underline"
+                  >
+                    Deletion requests
+                    {pendingDeletionRequests != null &&
+                    pendingDeletionRequests > 0
+                      ? ` (${pendingDeletionRequests} pending)`
+                      : ""}
+                  </Link>
+                </li>
+              </>
+            ) : null}
+          </ul>
+        </AccountSettingsSection>
+      ) : null}
+
+      <AccountSettingsSection title="Session" bare>
+        <SignOutButton />
+      </AccountSettingsSection>
     </main>
   );
 }

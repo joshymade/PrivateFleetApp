@@ -46,8 +46,6 @@ Copy from `.env.local.example`, then fill:
 | `SUPABASE_SERVICE_ROLE_KEY` | Secret / service_role (server-only) |
 | `R2_ACCOUNT_ID` / `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` / `R2_BUCKET_NAME` | Server-only — see [r2-setup.md](r2-setup.md) |
 | `R2_PUBLIC_URL` | Public/CDN base (`*.r2.dev` or custom domain), not the S3 API host |
-| `RESEND_API_KEY` | Server-only — Resend API key for driver Contact Admin emails |
-| `RESEND_FROM_EMAIL` | Verified sender (e.g. `PrivateFleet <noreply@yourdomain.com>`); optional fallback `onboarding@resend.dev` for tests |
 
 `DATABASE_URL` / `DIRECT_URL` are **optional** for the Next.js app. Use Dashboard connection strings only if you run `psql` / CLI migrations from your machine.
 

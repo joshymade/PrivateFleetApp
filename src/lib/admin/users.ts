@@ -1,8 +1,10 @@
+import type { AdminRecentContactItem } from "@/components/admin/admin-recent-messages";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import type {
   ContactReply,
   ContactRequest,
+  ContactRequestCategory,
   Profile,
   UserRole,
 } from "@/types/database";
@@ -167,6 +169,58 @@ export async function listAdminUsers(): Promise<{
   return { users, error: null };
 }
 
+/** Recent user-opened contact threads for the admin users hub. */
+export async function listRecentContactMessages(
+  limit = 12,
+): Promise<{ items: AdminRecentContactItem[]; error: string | null }> {
+  const supabase = await createClient();
+  const { data: rows, error } = await supabase
+    .from("contact_requests")
+    .select("id, driver_id, category, message, created_at")
+    .eq("source", "user")
+    .order("created_at", { ascending: false })
+    .limit(limit);
+
+  if (error) return { items: [], error: error.message };
+
+  const requests = (rows ?? []) as Pick<
+    ContactRequest,
+    "id" | "driver_id" | "category" | "message" | "created_at"
+  >[];
+  if (requests.length === 0) return { items: [], error: null };
+
+  const driverIds = [...new Set(requests.map((r) => r.driver_id))];
+  const { data: profiles } = await supabase
+    .from("profiles")
+    .select("id, full_name, email")
+    .in("id", driverIds);
+
+  const byId = new Map(
+    (profiles ?? []).map((p) => [
+      p.id as string,
+      {
+        full_name: (p.full_name as string | null) ?? null,
+        email: (p.email as string | null) ?? null,
+      },
+    ]),
+  );
+
+  const items: AdminRecentContactItem[] = requests.map((r) => {
+    const profile = byId.get(r.driver_id);
+    return {
+      id: r.id,
+      driver_id: r.driver_id,
+      category: r.category as ContactRequestCategory,
+      message: r.message,
+      created_at: r.created_at,
+      user_name: profile?.full_name ?? null,
+      user_email: profile?.email ?? null,
+    };
+  });
+
+  return { items, error: null };
+}
+
 export async function getAdminUserDetail(
   userId: string,
 ): Promise<{ user: AdminUserDetail | null; error: string | null }> {
@@ -205,7 +259,7 @@ export async function getAdminUserDetail(
     lastSignInMap([userId]),
     supabase
       .from("contact_requests")
-      .select("id, driver_id, category, message, created_at")
+      .select("id, driver_id, category, message, source, created_at")
       .eq("driver_id", userId)
       .order("created_at", { ascending: true }),
   ]);

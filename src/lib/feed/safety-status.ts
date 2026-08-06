@@ -1,21 +1,22 @@
 import type { SafetyInboxStatus } from "@/types/database";
 
-/** Driver-facing tag for a report’s safety inbox referral status. */
+/**
+ * Driver-facing tag for a report’s safety inbox referral status.
+ * Derived from `safety_inbox_items.status` when a referral exists;
+ * otherwise defaults to "safety not notified".
+ */
 export function safetyInboxStatusLabel(
   status: SafetyInboxStatus | null | undefined,
-): string | null {
+): string {
   if (status === "pending") return "Safety Notified";
   if (status === "reviewed") return "Safety Viewed";
   if (status === "dismissed") return "Safety Dismissed";
-  return null;
+  return "safety not notified";
 }
 
-/** Red for Notified / Viewed so they stand out; Dismissed stays muted. */
+/** All safety status tags use red so they stand out on feed cards and detail. */
 export function safetyInboxStatusClassName(
-  status: SafetyInboxStatus | null | undefined,
+  _status?: SafetyInboxStatus | null,
 ): string {
-  if (status === "pending" || status === "reviewed") {
-    return "text-destructive";
-  }
-  return "text-muted-foreground";
+  return "text-destructive";
 }

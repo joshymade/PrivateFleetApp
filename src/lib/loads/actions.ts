@@ -25,6 +25,9 @@ type ParsedStop = {
   stop_type: LoadStopType;
   stop_name: string;
   pickup_number: string | null;
+  seal_record: string | null;
+  pallet_count: number | null;
+  position_count: number | null;
   trailer_number: string | null;
 };
 
@@ -76,21 +79,58 @@ function parseStopType(raw: string): LoadStopType | null {
   return STOP_TYPES.has(value as LoadStopType) ? (value as LoadStopType) : null;
 }
 
+function parseOptionalNonNegInt(
+  raw: string,
+  label: string,
+): { value: number | null; error?: string } {
+  const trimmed = raw.trim();
+  if (!trimmed) return { value: null };
+  const n = Number(trimmed);
+  if (!Number.isInteger(n) || n < 0) {
+    return { value: null, error: `${label} must be a whole number ≥ 0.` };
+  }
+  return { value: n };
+}
+
 function parseStops(formData: FormData): { stops: ParsedStop[]; error?: string } {
   const types = formData.getAll("stop_type").map((v) => String(v));
   const names = formData.getAll("stop_name").map((v) => String(v).trim());
   const pickups = formData.getAll("pickup_number").map((v) => String(v).trim());
+  const seals = formData.getAll("seal_record").map((v) => String(v).trim());
+  const pallets = formData.getAll("pallet_count").map((v) => String(v).trim());
+  const positions = formData.getAll("position_count").map((v) => String(v).trim());
   const trailers = formData.getAll("stop_trailer_number").map((v) => String(v).trim());
   const stops: ParsedStop[] = [];
 
-  const rowCount = Math.max(types.length, names.length, pickups.length, trailers.length);
+  const rowCount = Math.max(
+    types.length,
+    names.length,
+    pickups.length,
+    seals.length,
+    pallets.length,
+    positions.length,
+    trailers.length,
+  );
   for (let i = 0; i < rowCount; i++) {
     const stop_name = names[i] ?? "";
     const pickup = pickups[i] ?? "";
+    const seal = seals[i] ?? "";
+    const palletRaw = pallets[i] ?? "";
+    const positionRaw = positions[i] ?? "";
     const trailer = trailers[i] ?? "";
     const typeRaw = types[i] ?? "";
     // Skip fully empty rows (extra blank stop slots).
-    if (!stop_name && !pickup && !trailer && !typeRaw.trim()) continue;
+    if (
+      !stop_name &&
+      !pickup &&
+      !seal &&
+      !palletRaw &&
+      !positionRaw &&
+      !trailer &&
+      !typeRaw.trim()
+    ) {
+      continue;
+    }
     if (!stop_name) {
       return { stops: [], error: `Stop ${i + 1} needs a name.` };
     }
@@ -101,10 +141,28 @@ function parseStops(formData: FormData): { stops: ParsedStop[]; error?: string }
         error: `Stop ${i + 1} needs a type (Store, Vendor, or DC).`,
       };
     }
+
+    let pallet_count: number | null = null;
+    let position_count: number | null = null;
+    if (stop_type === "store") {
+      const pallet = parseOptionalNonNegInt(palletRaw, `Stop ${i + 1} pallet count`);
+      if (pallet.error) return { stops: [], error: pallet.error };
+      const position = parseOptionalNonNegInt(
+        positionRaw,
+        `Stop ${i + 1} position count`,
+      );
+      if (position.error) return { stops: [], error: position.error };
+      pallet_count = pallet.value;
+      position_count = position.value;
+    }
+
     stops.push({
       stop_type,
       stop_name,
       pickup_number: pickup || null,
+      seal_record: seal || null,
+      pallet_count,
+      position_count,
       trailer_number: trailer || null,
     });
   }
@@ -260,6 +318,9 @@ export async function createLoad(
         stop_type: s.stop_type,
         stop_name: s.stop_name,
         pickup_number: s.pickup_number,
+        seal_record: s.seal_record,
+        pallet_count: s.pallet_count,
+        position_count: s.position_count,
         trailer_number: s.trailer_number,
         delivery_order: i + 1,
       })),
@@ -382,6 +443,9 @@ export async function updateLoad(
           stop_type: s.stop_type,
           stop_name: s.stop_name,
           pickup_number: s.pickup_number,
+          seal_record: s.seal_record,
+          pallet_count: s.pallet_count,
+          position_count: s.position_count,
           trailer_number: s.trailer_number,
           delivery_order: i + 1,
           completed: prior?.completed ?? false,
@@ -503,6 +567,107 @@ export async function updateStopTrailerNumber(
   revalidatePath(`/loads/${stop.load_id}`);
   revalidatePath(`/loads/${stop.load_id}/edit`);
   return { success: "Trailer updated." };
+}
+
+/**
+ * Set a stop's optional seal / sealed record (quick save from Home / checklist).
+ */
+export async function updateStopSealRecord(
+  stopId: string,
+  sealRecord: string | null,
+): Promise<LoadActionState> {
+  const { supabase, error, user } = await requireWriter();
+  if (error || !user) return { error: error ?? "Sign in to manage loads." };
+
+  const id = stopId.trim();
+  if (!id) return { error: "Missing stop." };
+
+  const { data: stop, error: stopError } = await supabase
+    .from("load_stops")
+    .select("id, load_id")
+    .eq("id", id)
+    .maybeSingle();
+
+  if (stopError || !stop) {
+    return { error: stopError?.message ?? "Stop not found." };
+  }
+
+  const trimmed = sealRecord?.trim() || null;
+
+  const { error: updateStopError } = await supabase
+    .from("load_stops")
+    .update({ seal_record: trimmed })
+    .eq("id", id);
+
+  if (updateStopError) return { error: updateStopError.message };
+
+  revalidatePath("/home");
+  revalidatePath("/loads");
+  revalidatePath(`/loads/${stop.load_id}`);
+  revalidatePath(`/loads/${stop.load_id}/edit`);
+  return { success: "Seal record updated." };
+}
+
+/**
+ * Set optional pallet + position counts on a store stop (cleared when empty).
+ * Rejects non-store stops.
+ */
+export async function updateStopStoreCounts(
+  stopId: string,
+  palletCount: number | null,
+  positionCount: number | null,
+): Promise<LoadActionState> {
+  const { supabase, error, user } = await requireWriter();
+  if (error || !user) return { error: error ?? "Sign in to manage loads." };
+
+  const id = stopId.trim();
+  if (!id) return { error: "Missing stop." };
+
+  const { data: stop, error: stopError } = await supabase
+    .from("load_stops")
+    .select("id, load_id, stop_type")
+    .eq("id", id)
+    .maybeSingle();
+
+  if (stopError || !stop) {
+    return { error: stopError?.message ?? "Stop not found." };
+  }
+
+  if (stop.stop_type !== "store") {
+    return { error: "Pallet and position counts are only for store stops." };
+  }
+
+  const pallet =
+    palletCount == null || Number.isNaN(palletCount)
+      ? null
+      : Math.trunc(palletCount);
+  const position =
+    positionCount == null || Number.isNaN(positionCount)
+      ? null
+      : Math.trunc(positionCount);
+
+  if (pallet != null && pallet < 0) {
+    return { error: "Pallet count must be ≥ 0." };
+  }
+  if (position != null && position < 0) {
+    return { error: "Position count must be ≥ 0." };
+  }
+
+  const { error: updateStopError } = await supabase
+    .from("load_stops")
+    .update({
+      pallet_count: pallet,
+      position_count: position,
+    })
+    .eq("id", id);
+
+  if (updateStopError) return { error: updateStopError.message };
+
+  revalidatePath("/home");
+  revalidatePath("/loads");
+  revalidatePath(`/loads/${stop.load_id}`);
+  revalidatePath(`/loads/${stop.load_id}/edit`);
+  return { success: "Store counts updated." };
 }
 
 /**

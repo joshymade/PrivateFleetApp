@@ -1,10 +1,10 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 import {
   deleteUserAccount,
-  replyToContactRequest,
+  messageUser,
   resetUserLoads,
   resetUserReports,
   setUserDisabled,
@@ -32,6 +32,7 @@ type ThreadItem =
       at: string;
       category: ContactRequestCategory;
       body: string;
+      source: "user" | "admin";
     }
   | {
       kind: "reply";
@@ -54,13 +55,16 @@ function formatWhen(iso: string): string {
 
 function buildThread(user: AdminUserDetail): ThreadItem[] {
   const items: ThreadItem[] = [
-    ...user.contact_requests.map((r) => ({
-      kind: "request" as const,
-      id: r.id,
-      at: r.created_at,
-      category: r.category,
-      body: r.message,
-    })),
+    ...user.contact_requests
+      .filter((r) => !(r.source === "admin" && !r.message.trim()))
+      .map((r) => ({
+        kind: "request" as const,
+        id: r.id,
+        at: r.created_at,
+        category: r.category,
+        body: r.message,
+        source: r.source,
+      })),
     ...user.contact_replies.map((r) => ({
       kind: "reply" as const,
       id: r.id,
@@ -96,18 +100,23 @@ export function AdminUserDetailPanel({
   const [regionDraft, setRegionDraft] = useState(
     user.region != null ? String(user.region) : "",
   );
+  const [syncedUserKey, setSyncedUserKey] = useState(
+    `${user.id}:${user.role}:${user.region ?? ""}`,
+  );
   const [confirm, setConfirm] = useState<
     null | "disable" | "enable" | "reset_reports" | "reset_loads" | "delete"
   >(null);
 
-  useEffect(() => {
+  const userKey = `${user.id}:${user.role}:${user.region ?? ""}`;
+  if (userKey !== syncedUserKey) {
+    setSyncedUserKey(userKey);
     setRoleDraft(initialRoleDraft(user.role));
     setRegionDraft(user.region != null ? String(user.region) : "");
-  }, [user.id, user.role, user.region]);
+  }
 
   const isSelf = user.id === currentUserId;
-  const latestRequest = user.contact_requests[user.contact_requests.length - 1];
   const thread = buildThread(user);
+  const canMessage = user.role !== "admin" && !isSelf;
   const canSaveRole =
     Boolean(roleDraft) && roleDraft !== user.role && !pending;
   const regionTarget =
@@ -284,7 +293,7 @@ export function AdminUserDetailPanel({
         <h2 className="text-sm font-semibold text-foreground">Messages</h2>
         {thread.length === 0 ? (
           <p className="text-sm text-muted-foreground">
-            This user has not sent any contact messages yet.
+            No messages yet. Send one below — it appears in their Contact inbox.
           </p>
         ) : (
           <ul className="flex flex-col gap-2">
@@ -292,15 +301,15 @@ export function AdminUserDetailPanel({
               <li
                 key={`${item.kind}-${item.id}`}
                 className={`rounded-2xl px-3 py-2.5 text-sm ${
-                  item.kind === "request"
+                  item.kind === "request" && item.source === "user"
                     ? "border border-border bg-muted/30"
                     : "border border-brand/30 bg-brand/5"
                 }`}
               >
                 <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                  {item.kind === "request"
-                    ? `Driver · ${CATEGORY_LABELS[item.category]}`
-                    : "Admin reply"}{" "}
+                  {item.kind === "request" && item.source === "user"
+                    ? `User · ${CATEGORY_LABELS[item.category]}`
+                    : "Admin"}{" "}
                   · {formatWhen(item.at)}
                 </p>
                 <p className="mt-1 whitespace-pre-wrap text-foreground">
@@ -311,26 +320,26 @@ export function AdminUserDetailPanel({
           </ul>
         )}
 
-        {latestRequest ? (
+        {canMessage ? (
           <form
             className="space-y-2"
             onSubmit={(e) => {
               e.preventDefault();
               run(() =>
-                replyToContactRequest({
-                  contactRequestId: latestRequest.id,
+                messageUser({
+                  userId: user.id,
                   body: replyBody,
                 }),
               );
             }}
           >
             <label className="block text-sm">
-              <span className="mb-1 block font-medium">Reply to driver</span>
+              <span className="mb-1 block font-medium">Message user</span>
               <textarea
                 rows={3}
                 value={replyBody}
                 onChange={(e) => setReplyBody(e.target.value)}
-                placeholder="Your reply appears in their Contact inbox…"
+                placeholder="Your message appears in their Contact inbox…"
                 className="w-full rounded-xl border border-border bg-background px-3 py-2 text-base"
                 disabled={pending}
               />
@@ -340,7 +349,7 @@ export function AdminUserDetailPanel({
               disabled={pending || replyBody.trim().length === 0}
               className="min-h-11 w-full rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground disabled:opacity-60"
             >
-              {pending ? "Sending…" : "Send reply"}
+              {pending ? "Sending…" : "Send message"}
             </button>
           </form>
         ) : null}

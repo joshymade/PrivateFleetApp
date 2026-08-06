@@ -34,6 +34,7 @@ export default async function ReportPage({ searchParams }: ReportPageProps) {
 
   return (
     <DamageCaptureForm
+      key={`${submittedId ?? "new"}-${initialAssetType ?? "tractor"}`}
       initialAssetType={initialAssetType}
       submittedId={submittedId}
       recentLoads={recentLoads}

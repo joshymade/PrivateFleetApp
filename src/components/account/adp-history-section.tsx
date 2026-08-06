@@ -12,6 +12,9 @@ import {
   YAxis,
 } from "recharts";
 import { createAdpEntry } from "@/app/(app)/account/actions";
+import { MaskedMoney } from "@/components/ui/masked-money";
+import { useHideMoney } from "@/lib/hide-money";
+import { displayMoney } from "@/lib/money";
 import { toDateString } from "@/lib/loads/date";
 import type { AdpEntry } from "@/types/database";
 
@@ -28,6 +31,7 @@ function defaultPeriodEnd(start: string): string {
 
 export function AdpHistorySection({ entries }: { entries: AdpEntry[] }) {
   const router = useRouter();
+  const { hideMoney } = useHideMoney();
   const [periodStart, setPeriodStart] = useState(defaultPeriodStart);
   const [periodEnd, setPeriodEnd] = useState(() =>
     defaultPeriodEnd(defaultPeriodStart()),
@@ -71,16 +75,6 @@ export function AdpHistorySection({ entries }: { entries: AdpEntry[] }) {
 
   return (
     <div className="flex flex-col gap-4">
-      <div>
-        <p className="text-sm font-medium text-foreground">
-          Average Daily Pay (ADP)
-        </p>
-        <p className="mt-1 text-xs text-muted-foreground">
-          Enter your ADP each biweekly pay period. Latest ADP also shows on
-          Home.
-        </p>
-      </div>
-
       {chartData.length > 0 ? (
         <div className="h-44 w-full">
           <ResponsiveContainer width="100%" height="100%">
@@ -90,7 +84,7 @@ export function AdpHistorySection({ entries }: { entries: AdpEntry[] }) {
               <YAxis tick={{ fontSize: 11 }} width={40} />
               <Tooltip
                 formatter={(value: number) => [
-                  `$${value.toFixed(2)}`,
+                  displayMoney(Number(value), hideMoney),
                   "ADP",
                 ]}
                 labelFormatter={(_, payload) =>
@@ -117,9 +111,10 @@ export function AdpHistorySection({ entries }: { entries: AdpEntry[] }) {
 
       <form onSubmit={onSubmit} className="space-y-3">
         <div className="grid grid-cols-2 gap-3">
-          <label className="block text-sm">
+          <label className="block text-sm" htmlFor="adp-period-start">
             <span className="mb-1 block font-medium">Period start</span>
             <input
+              id="adp-period-start"
               type="date"
               required
               value={periodStart}
@@ -130,9 +125,10 @@ export function AdpHistorySection({ entries }: { entries: AdpEntry[] }) {
               className="min-h-11 w-full rounded-xl border border-border bg-background px-3 text-base"
             />
           </label>
-          <label className="block text-sm">
+          <label className="block text-sm" htmlFor="adp-period-end">
             <span className="mb-1 block font-medium">Period end</span>
             <input
+              id="adp-period-end"
               type="date"
               required
               value={periodEnd}
@@ -141,9 +137,10 @@ export function AdpHistorySection({ entries }: { entries: AdpEntry[] }) {
             />
           </label>
         </div>
-        <label className="block text-sm">
+        <label className="block text-sm" htmlFor="adp-amount">
           <span className="mb-1 block font-medium">ADP amount ($)</span>
           <input
+            id="adp-amount"
             inputMode="decimal"
             required
             value={amount}
@@ -185,7 +182,7 @@ export function AdpHistorySection({ entries }: { entries: AdpEntry[] }) {
                   {e.period_start} → {e.period_end}
                 </span>
                 <span className="font-medium tabular-nums">
-                  ${Number(e.adp_amount).toFixed(2)}
+                  <MaskedMoney amount={Number(e.adp_amount)} />
                 </span>
               </li>
             ))}

@@ -12,11 +12,9 @@ type InboxItem = ContactReply & {
 type Tab = "compose" | "inbox";
 
 export function ContactTabs({
-  defaultEmail,
   replies,
   unreadCount,
 }: {
-  defaultEmail: string;
   replies: InboxItem[];
   unreadCount: number;
 }) {
@@ -63,7 +61,7 @@ export function ContactTabs({
       </div>
 
       {tab === "compose" ? (
-        <ContactForm defaultEmail={defaultEmail} />
+        <ContactForm />
       ) : (
         <ContactInbox replies={replies} />
       )}

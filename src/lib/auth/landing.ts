@@ -3,10 +3,7 @@ import {
   FORCE_CHANGE_PASSWORD_PATH,
   PROFILE_SETUP_PATH,
 } from "@/lib/auth/profile-complete";
-
-export function activeLoadEditPath(loadId: string): string {
-  return `/loads/${loadId}/edit`;
-}
+import { SPLASH_PATH } from "@/lib/splash";
 
 export type PostAuthLanding = {
   /** Path for `router.replace` / `redirect` (may include `?setup=1`). */
@@ -15,11 +12,16 @@ export type PostAuthLanding = {
   search?: Record<string, string>;
 };
 
-/** Resolve post-login / app-open destination from known active-load id. */
+/**
+ * App entry (`/`) shows the splash first when not hidden forever.
+ * After splash Enter (or when splash is skipped), post-auth landing below applies.
+ */
+export { SPLASH_PATH };
+
+/** Resolve post-login / post-splash destination (not the splash itself). */
 export function resolvePostAuthLanding(opts: {
   mustChangePassword?: boolean;
   needsSetup: boolean;
-  activeLoadId: string | null;
 }): PostAuthLanding {
   if (opts.mustChangePassword) {
     return {
@@ -34,51 +36,25 @@ export function resolvePostAuthLanding(opts: {
       search: { setup: "1" },
     };
   }
-  if (opts.activeLoadId) {
-    const pathname = activeLoadEditPath(opts.activeLoadId);
-    return { href: pathname, pathname };
-  }
   return { href: "/home", pathname: "/home" };
 }
 
-export async function fetchActiveLoadId(
-  supabase: SupabaseClient,
-  userId: string,
-): Promise<string | null> {
-  const { data, error } = await supabase
-    .from("loads")
-    .select("id")
-    .eq("assigned_driver_id", userId)
-    .eq("status", "active")
-    .limit(1)
-    .maybeSingle();
-
-  if (error || !data?.id) return null;
-  return data.id as string;
-}
-
 /**
- * Default landing after login or opening the app while authenticated.
- * Incomplete profile → setup gate; active load → edit page; else `/home`.
+ * Default landing after login or after splash when authenticated + not hidden.
+ * Incomplete profile → setup gate; must change password → force change; else `/home`.
+ * Cold open still hits `/` (splash) first via PWA `start_url` / root route.
  */
 export async function getPostAuthLandingPath(
-  supabase: SupabaseClient,
+  _supabase: SupabaseClient,
   opts: {
     userId: string;
     needsSetup: boolean;
     mustChangePassword?: boolean;
   },
 ): Promise<PostAuthLanding> {
-  if (opts.mustChangePassword) {
-    return resolvePostAuthLanding({
-      mustChangePassword: true,
-      needsSetup: false,
-      activeLoadId: null,
-    });
-  }
-  if (opts.needsSetup) {
-    return resolvePostAuthLanding({ needsSetup: true, activeLoadId: null });
-  }
-  const activeLoadId = await fetchActiveLoadId(supabase, opts.userId);
-  return resolvePostAuthLanding({ needsSetup: false, activeLoadId });
+  void opts.userId;
+  return resolvePostAuthLanding({
+    mustChangePassword: opts.mustChangePassword,
+    needsSetup: opts.needsSetup,
+  });
 }

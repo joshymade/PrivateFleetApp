@@ -6,25 +6,19 @@ import { DriverId } from "@/components/ui/driver-id";
 
 type Props = {
   onClose: () => void;
-  defaultEmail: string;
   driverId: string | null;
 };
 
-export function ContactAdminModal({
-  onClose,
-  defaultEmail,
-  driverId,
-}: Props) {
+export function ContactAdminModal({ onClose, driverId }: Props) {
   const titleId = useId();
-  const emailRef = useRef<HTMLInputElement>(null);
-  const [email, setEmail] = useState(defaultEmail);
+  const messageRef = useRef<HTMLTextAreaElement>(null);
   const [message, setMessage] = useState("");
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [sent, setSent] = useState(false);
 
   useEffect(() => {
-    const t = window.setTimeout(() => emailRef.current?.focus(), 0);
+    const t = window.setTimeout(() => messageRef.current?.focus(), 0);
     return () => window.clearTimeout(t);
   }, []);
 
@@ -48,7 +42,7 @@ export function ContactAdminModal({
     setSent(false);
 
     startTransition(async () => {
-      const result = await contactAdminAboutIdentity({ email, message });
+      const result = await contactAdminAboutIdentity({ message });
       if (!result.ok) {
         setError(result.error);
         return;
@@ -75,13 +69,13 @@ export function ContactAdminModal({
         </h2>
         <p className="mt-1 text-sm text-muted-foreground">
           Request a name or work-state change. Your Driver ID is included
-          automatically.
+          automatically. Admin replies in Contact › Inbox.
         </p>
 
         {sent ? (
           <div className="mt-4 flex flex-col gap-3">
             <p className="text-sm text-brand" role="status">
-              Request sent. An admin will follow up at the email you provided.
+              Request sent. Check Contact › Inbox for Admin replies.
             </p>
             <button
               type="button"
@@ -93,20 +87,6 @@ export function ContactAdminModal({
           </div>
         ) : (
           <form onSubmit={onSubmit} className="mt-4 flex flex-col gap-3">
-            <label className="flex flex-col gap-1.5 text-sm">
-              <span className="text-muted-foreground">Your email</span>
-              <input
-                ref={emailRef}
-                type="email"
-                name="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                autoComplete="email"
-                className="min-h-11 rounded-lg border border-input bg-background px-3 text-sm text-foreground outline-none focus:border-ring focus:ring-2 focus:ring-ring/30"
-              />
-            </label>
-
             <div className="flex flex-col gap-1.5 text-sm">
               <span className="text-muted-foreground">Driver ID</span>
               <div className="min-h-11 rounded-lg border border-border bg-muted/40 px-3 py-2.5 text-foreground">
@@ -117,6 +97,7 @@ export function ContactAdminModal({
             <label className="flex flex-col gap-1.5 text-sm">
               <span className="text-muted-foreground">Message</span>
               <textarea
+                ref={messageRef}
                 name="message"
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}

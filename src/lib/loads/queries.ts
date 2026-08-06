@@ -6,6 +6,7 @@ import type {
   LoadStop,
   LoadTrailerHistory,
   Profile,
+  ShiftPunch,
 } from "@/types/database";
 import {
   drivenMiles,
@@ -15,6 +16,7 @@ import {
   workWeekDays,
   workWeekStart,
 } from "./date";
+import { shiftDurationMinutes } from "./shift-time";
 
 export type LoadWithStops = Load & {
   load_stops: LoadStop[];
@@ -31,6 +33,8 @@ export type MonthLoadTotals = {
   paidMiles: number;
   completedLoads: number;
   earnings: number;
+  /** Sum of complete shift punch durations in the month (minutes). */
+  workedMinutes: number;
 };
 
 export type WorkWeekChartDay = {
@@ -62,7 +66,7 @@ export async function getSessionProfile(): Promise<{
   const { data: profile } = await supabase
     .from("profiles")
     .select(
-      "id, driver_id, email, full_name, work_state, show_work_state_on_home, identity_changes_remaining, admin_contact_email, week_start_day, off_days, next_pay_date, current_truck_number, role, created_at, updated_at",
+      "id, driver_id, email, full_name, work_state, show_work_state_on_home, identity_changes_remaining, admin_contact_email, week_start_day, off_days, pay_period_start, next_pay_date, current_truck_number, role, created_at, updated_at",
     )
     .eq("id", user.id)
     .maybeSingle();
@@ -244,6 +248,60 @@ export async function getDailyPayForWorkWeek(
   return data as DailyPayEntry[];
 }
 
+/** Owner-scoped shift punches for a date range (inclusive). */
+export async function getShiftPunchesForRange(
+  userId: string,
+  rangeStart: string,
+  rangeEnd: string,
+): Promise<ShiftPunch[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("shift_punches")
+    .select("*")
+    .eq("driver_id", userId)
+    .gte("work_date", rangeStart)
+    .lte("work_date", rangeEnd)
+    .order("work_date", { ascending: true });
+
+  if (error || !data) return [];
+  return data as ShiftPunch[];
+}
+
+/** Sum of complete punch durations (minutes) for a calendar month. */
+export async function getMonthWorkedMinutes(
+  userId: string,
+  year: number,
+  month: number,
+): Promise<number> {
+  const supabase = await createClient();
+  const { start, end } = monthBounds(year, month);
+  const { data, error } = await supabase
+    .from("shift_punches")
+    .select("start_time, end_time")
+    .eq("driver_id", userId)
+    .gte("work_date", start)
+    .lte("work_date", end);
+
+  if (error || !data) return 0;
+
+  let total = 0;
+  for (const row of data as Pick<ShiftPunch, "start_time" | "end_time">[]) {
+    const mins = shiftDurationMinutes(row.start_time, row.end_time);
+    if (mins != null) total += mins;
+  }
+  return total;
+}
+
+/** Sum minutes for punches that have both start and end. */
+export function sumPunchMinutes(punches: ShiftPunch[]): number {
+  let total = 0;
+  for (const punch of punches) {
+    const mins = shiftDurationMinutes(punch.start_time, punch.end_time);
+    if (mins != null) total += mins;
+  }
+  return total;
+}
+
 /** Sum of daily pay amounts for a calendar month (owner-scoped).
  * Excludes days that already have a non-cancelled/non-archived load so
  * totals never double-count load pay + daily pay.
@@ -417,6 +475,7 @@ export async function getLoadById(id: string): Promise<LoadDetail | null> {
 export function summarizeMonthLoads(
   loads: LoadWithStops[],
   latestAdp: number | null,
+  workedMinutes = 0,
 ): MonthLoadTotals {
   let driven = 0;
   let paid = 0;
@@ -440,6 +499,7 @@ export function summarizeMonthLoads(
     paidMiles: paid,
     completedLoads,
     earnings,
+    workedMinutes,
   };
 }
 

@@ -11,8 +11,7 @@ const CATEGORIES: { value: ContactRequestCategory; label: string }[] = [
   { value: "other", label: "Other" },
 ];
 
-export function ContactForm({ defaultEmail }: { defaultEmail: string }) {
-  const [email, setEmail] = useState(defaultEmail);
+export function ContactForm() {
   const [category, setCategory] =
     useState<ContactRequestCategory>("app_issue");
   const [message, setMessage] = useState("");
@@ -25,7 +24,7 @@ export function ContactForm({ defaultEmail }: { defaultEmail: string }) {
     setError(null);
     setDone(false);
     startTransition(async () => {
-      const result = await submitContactRequest({ email, category, message });
+      const result = await submitContactRequest({ category, message });
       if (!result.ok) {
         setError(result.error);
         return;
@@ -37,17 +36,6 @@ export function ContactForm({ defaultEmail }: { defaultEmail: string }) {
 
   return (
     <form onSubmit={onSubmit} className="space-y-4">
-      <label className="block text-sm">
-        <span className="mb-1 block font-medium">Your email</span>
-        <input
-          type="email"
-          required
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          className="min-h-11 w-full rounded-xl border border-border bg-background px-3 text-base"
-        />
-      </label>
-
       <label className="block text-sm">
         <span className="mb-1 block font-medium">Topic</span>
         <select
@@ -84,7 +72,7 @@ export function ContactForm({ defaultEmail }: { defaultEmail: string }) {
       ) : null}
       {done ? (
         <p className="text-sm text-emerald-700 dark:text-emerald-400">
-          Message sent to Admin.
+          Message sent to Admin. Check Inbox for replies.
         </p>
       ) : null}
 

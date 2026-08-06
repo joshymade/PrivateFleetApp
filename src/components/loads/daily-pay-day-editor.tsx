@@ -6,15 +6,7 @@ import {
   deleteDailyPay,
   upsertDailyPay,
 } from "@/lib/loads/daily-pay";
-
-function currency(amount: number): string {
-  return amount.toLocaleString(undefined, {
-    style: "currency",
-    currency: "USD",
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
-}
+import { MaskedMoney } from "@/components/ui/masked-money";
 
 export function DailyPayDayEditor({
   workDate,
@@ -58,7 +50,7 @@ export function DailyPayDayEditor({
               Daily pay
             </span>
             <span className="mt-0.5 block font-semibold tabular-nums text-foreground">
-              {currency(amount)}
+              <MaskedMoney amount={amount} />
             </span>
           </>
         ) : (

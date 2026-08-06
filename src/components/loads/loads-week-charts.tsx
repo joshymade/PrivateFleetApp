@@ -10,9 +10,13 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { useHideMoney } from "@/lib/hide-money";
+import { displayMoney, MONEY_MASK } from "@/lib/money";
 import type { WorkWeekChartSeries } from "@/lib/loads/queries";
 
 export function LoadsWeekCharts({ weeks }: { weeks: WorkWeekChartSeries[] }) {
+  const { hideMoney } = useHideMoney();
+
   if (weeks.length === 0) {
     return (
       <p className="rounded-2xl border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
@@ -50,12 +54,17 @@ export function LoadsWeekCharts({ weeks }: { weeks: WorkWeekChartSeries[] }) {
                   orientation="right"
                   tick={{ fontSize: 11 }}
                   width={40}
-                  tickFormatter={(v: number) => `$${v}`}
+                  tickFormatter={(v: number) =>
+                    hideMoney ? MONEY_MASK : `$${v}`
+                  }
                 />
                 <Tooltip
                   formatter={(value: number, name: string) => {
                     if (name === "earnings") {
-                      return [`$${Number(value).toFixed(2)}`, "Earnings"];
+                      return [
+                        displayMoney(Number(value), hideMoney),
+                        "Earnings",
+                      ];
                     }
                     if (name === "driven") {
                       return [value, "Driven mi"];

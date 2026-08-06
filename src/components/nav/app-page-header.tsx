@@ -1,4 +1,5 @@
 import { StateIcon } from "@/components/icons";
+import { HideMoneyToggle } from "@/components/nav/hide-money-toggle";
 import { NotificationBell } from "@/components/nav/notification-bell";
 import { DriverId } from "@/components/ui/driver-id";
 import {
@@ -39,15 +40,18 @@ export function AppPageHeader({
 
   return (
     <header className="space-y-1.5 border-b border-border pb-3 pt-1">
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex items-start justify-between gap-3">
         <span className="inline-flex items-center rounded-full bg-brand/10 px-2.5 py-1 text-xs font-semibold tracking-wide text-brand ring-1 ring-accent/60">
           {welcomeChipLabel(role)}
         </span>
-        <NotificationBell
-          notifications={recentNotifications}
-          unreadCount={unreadNotificationCount}
-          hasMore={hasMoreNotifications}
-        />
+        <div className="flex flex-col items-end gap-1.5">
+          <NotificationBell
+            notifications={recentNotifications}
+            unreadCount={unreadNotificationCount}
+            hasMore={hasMoreNotifications}
+          />
+          <HideMoneyToggle />
+        </div>
       </div>
       <h1
         className={`flex flex-wrap items-center gap-x-1.5 gap-y-1 ${pageTitleClassName}`}

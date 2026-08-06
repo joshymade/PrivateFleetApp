@@ -209,7 +209,10 @@ export function ExportForm({
       reports[0] ||
       null;
     if (!report) return;
-    runExport(report);
+    // Defer so autodownload setState is not sync inside the effect body.
+    queueMicrotask(() => {
+      runExport(report);
+    });
     // Intentionally once on mount for deep-link autodownload.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

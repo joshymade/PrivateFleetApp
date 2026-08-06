@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useOptimistic, useState, useTransition } from "react";
 import { sendToSafety } from "@/app/(app)/feed/actions";
 
 type SendToSafetyButtonProps = {
@@ -18,11 +18,7 @@ export function SendToSafetyButton({
 }: SendToSafetyButtonProps) {
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
-  const [sent, setSent] = useState(alreadySent);
-
-  useEffect(() => {
-    setSent(alreadySent);
-  }, [alreadySent]);
+  const [sent, setSent] = useOptimistic(alreadySent);
 
   if (!isOwner) return null;
 
@@ -30,12 +26,11 @@ export function SendToSafetyButton({
     if (sent || pending) return;
     setError(null);
     startTransition(async () => {
+      setSent(true);
       const result = await sendToSafety(reportId);
       if (!result.ok) {
         setError(result.error);
-        return;
       }
-      setSent(true);
     });
   }
 

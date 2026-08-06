@@ -13,6 +13,7 @@ import {
   getSessionProfile,
 } from "@/lib/auth/profile";
 import {
+  addCalendarDays,
   currentPayPeriod,
   formatCardMonthDay,
   formatPayPeriodLabel,
@@ -28,6 +29,9 @@ import {
   getLoadsForWorkWeek,
   getMonthDailyPayTotal,
   getMonthLoadStats,
+  getMonthWorkedMinutes,
+  getShiftPunchesForRange,
+  sumPunchMinutes,
 } from "@/lib/loads/queries";
 import { createClient } from "@/lib/supabase/server";
 import type { SafetyHomeStats } from "@/types/database";
@@ -114,7 +118,10 @@ export default async function HomePage() {
     const weekStartDay = profile.week_start_day ?? 5;
     const offDays = profile.off_days ?? [];
     const nextPayDate = profile.next_pay_date ?? null;
-    const periodMode = Boolean(nextPayDate);
+    const payPeriodStart =
+      profile.pay_period_start ??
+      (nextPayDate ? addCalendarDays(nextPayDate, -13) : null);
+    const periodMode = Boolean(nextPayDate && payPeriodStart);
 
     let rangeStart: string;
     let rangeEnd: string;
@@ -122,13 +129,13 @@ export default async function HomePage() {
     let payDayDate: string | null = null;
     let rangeLabel: string;
 
-    if (nextPayDate) {
-      const period = currentPayPeriod(today, nextPayDate);
+    if (periodMode && nextPayDate && payPeriodStart) {
+      const period = currentPayPeriod(today, payPeriodStart, nextPayDate);
       rangeStart = period.start;
       rangeEnd = period.end;
       days = period.days;
       payDayDate = period.payDay;
-      rangeLabel = `${formatPayPeriodLabel(period.start, period.end)} · Pay day ${formatCardMonthDay(period.payDay)}`;
+      rangeLabel = `${formatPayPeriodLabel(period.start, period.end)} · Ends ${formatCardMonthDay(period.end)} · Deposit ${formatCardMonthDay(period.payDay)}`;
     } else {
       rangeStart = workWeekStart(today, weekStartDay);
       days = workWeekDays(rangeStart);
@@ -138,7 +145,7 @@ export default async function HomePage() {
 
     const [todayYear, todayMonth] = today.split("-").map(Number);
 
-    const [periodLoads, monthStats, latestAdp, activeLoad, periodDailyPay, monthDailyPay] =
+    const [periodLoads, monthStats, latestAdp, activeLoad, periodDailyPay, monthDailyPay, periodPunches, monthWorkedMinutes] =
       await Promise.all([
         getLoadsForWorkWeek(userId, rangeStart, rangeEnd),
         getMonthLoadStats(userId, todayYear!, todayMonth!),
@@ -146,10 +153,18 @@ export default async function HomePage() {
         getActiveLoadForDriver(userId),
         getDailyPayForWorkWeek(userId, rangeStart, rangeEnd),
         getMonthDailyPayTotal(userId, todayYear!, todayMonth!),
+        getShiftPunchesForRange(userId, rangeStart, rangeEnd),
+        getMonthWorkedMinutes(userId, todayYear!, todayMonth!),
       ]);
 
     const dailyPayByDate = new Map(
       periodDailyPay.map((entry) => [entry.work_date, Number(entry.amount)]),
+    );
+    const punchesByDate = new Map(
+      periodPunches.map((punch) => [
+        punch.work_date,
+        { start_time: punch.start_time, end_time: punch.end_time },
+      ]),
     );
 
     const daySummaries = summarizeWorkWeekDays(
@@ -160,8 +175,10 @@ export default async function HomePage() {
       activeLoad,
       dailyPayByDate,
       payDayDate,
+      punchesByDate,
     );
     const periodStats = summarizeWorkWeekStats(periodLoads, periodDailyPay);
+    const periodWorkedMinutes = sumPunchMinutes(periodPunches);
 
     workWeekSection = (
       <WorkWeekHome
@@ -171,16 +188,18 @@ export default async function HomePage() {
           periodLoads: periodStats.loadCount,
           periodEarnings: periodStats.earnings,
           periodDrivenMiles: periodStats.drivenMiles,
+          periodWorkedMinutes,
           monthLoads: monthStats.loadCount,
           monthEarnings: monthStats.earnings + monthDailyPay,
           monthDrivenMiles: monthStats.drivenMiles,
+          monthWorkedMinutes,
         }}
         latestAdp={latestAdp}
         activeLoad={activeLoad}
         currentTruckNumber={profile.current_truck_number}
         canManage={canManage}
         periodMode={periodMode}
-        needsPayDate={!nextPayDate}
+        needsPayDate={!periodMode}
       />
     );
   }

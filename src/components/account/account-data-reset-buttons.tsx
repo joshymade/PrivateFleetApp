@@ -59,13 +59,7 @@ export function AccountDataResetButtons() {
   }
 
   return (
-    <div className="flex flex-col gap-3 border-t border-border pt-4">
-      <h3 className="text-sm font-medium text-foreground">Data reset</h3>
-      <p className="text-xs text-muted-foreground">
-        Clear your loads or remove your name from damage reports. Only Admin can
-        permanently delete reports.
-      </p>
-
+    <div className="flex flex-col gap-3">
       <div className="flex flex-col gap-2">
         <div className="flex items-center gap-2">
           <button

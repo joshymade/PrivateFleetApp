@@ -43,8 +43,7 @@ export function ContactInbox({ replies }: { replies: InboxItem[] }) {
   if (replies.length === 0) {
     return (
       <p className="text-sm text-muted-foreground">
-        No replies from Admin yet. Messages you send appear here when Admin
-        responds.
+        No replies from Admin yet. When Admin responds, messages show up here.
       </p>
     );
   }

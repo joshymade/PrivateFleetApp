@@ -24,6 +24,7 @@ import {
   buildWorkWeekCharts,
   getLatestAdp,
   getLoadsForMonth,
+  getMonthWorkedMinutes,
   getOlderLoads,
   getSessionProfile,
   summarizeMonthLoads,
@@ -72,9 +73,10 @@ export default async function LoadsPage({
   const weekStartDay = profile?.week_start_day ?? 5;
   const scope = { userId, role: profile!.role };
 
-  const [monthLoads, latestAdpEntry] = await Promise.all([
+  const [monthLoads, latestAdpEntry, monthWorkedMinutes] = await Promise.all([
     getLoadsForMonth(year, month, scope),
     getLatestAdp(userId),
+    getMonthWorkedMinutes(userId, year, month),
   ]);
 
   const olderLoads = isCurrentMonth
@@ -87,6 +89,7 @@ export default async function LoadsPage({
   const monthTotals = summarizeMonthLoads(
     monthLoads,
     Number.isFinite(latestAdp) ? latestAdp : null,
+    monthWorkedMinutes,
   );
   const weekCharts = buildWorkWeekCharts(monthLoads, weekStartDay);
 

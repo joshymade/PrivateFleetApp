@@ -1,12 +1,17 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useOptimistic, useState, useTransition } from "react";
 import { noticeReport } from "@/app/(app)/feed/actions";
 
 type NoticeButtonProps = {
   reportId: string;
   noticedByMe: boolean;
   noticeCount: number;
+};
+
+type NoticeState = {
+  noticed: boolean;
+  count: number;
 };
 
 export function NoticeButton({
@@ -16,33 +21,29 @@ export function NoticeButton({
 }: NoticeButtonProps) {
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
-  const [localNoticed, setLocalNoticed] = useState(noticedByMe);
-  const [localCount, setLocalCount] = useState(noticeCount);
-
-  useEffect(() => {
-    setLocalNoticed(noticedByMe);
-    setLocalCount(noticeCount);
-  }, [noticedByMe, noticeCount]);
+  const [optimistic, setOptimistic] = useOptimistic(
+    { noticed: noticedByMe, count: noticeCount } satisfies NoticeState,
+    (current): NoticeState => ({
+      noticed: true,
+      count: current.count + 1,
+    }),
+  );
 
   function notice() {
-    if (localNoticed || pending) return;
+    if (optimistic.noticed || pending) return;
 
     setError(null);
-    setLocalNoticed(true);
-    setLocalCount((c) => c + 1);
-
     startTransition(async () => {
+      setOptimistic(null);
       const result = await noticeReport(reportId);
       if (!result.ok) {
-        setLocalNoticed(false);
-        setLocalCount((c) => Math.max(0, c - 1));
         setError(result.error);
       }
     });
   }
 
-  const label = localNoticed
-    ? `Verified by You · ${localCount}`
+  const label = optimistic.noticed
+    ? `Verified by You · ${optimistic.count}`
     : "👍 I Noticed This Too";
 
   return (
@@ -50,10 +51,10 @@ export function NoticeButton({
       <button
         type="button"
         onClick={notice}
-        disabled={pending || localNoticed}
-        aria-pressed={localNoticed}
+        disabled={pending || optimistic.noticed}
+        aria-pressed={optimistic.noticed}
         className={`min-h-11 rounded-lg px-4 text-sm font-medium transition-colors disabled:opacity-60 ${
-          localNoticed
+          optimistic.noticed
             ? "bg-emerald-700 text-white disabled:opacity-100 dark:bg-emerald-600"
             : "bg-primary text-primary-foreground"
         }`}

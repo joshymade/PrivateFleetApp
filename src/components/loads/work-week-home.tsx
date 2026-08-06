@@ -1,8 +1,13 @@
 import Link from "next/link";
+import type { ReactNode } from "react";
 import { CompleteLoadButton } from "@/components/loads/complete-load-button";
 import { DailyPayDayEditor } from "@/components/loads/daily-pay-day-editor";
 import { DepartStopButton } from "@/components/loads/depart-stop-button";
+import { ShiftPunchDayEditor } from "@/components/loads/shift-punch-day-editor";
+import { StopSealField } from "@/components/loads/stop-seal-field";
+import { StopStoreCountsField } from "@/components/loads/stop-store-counts-field";
 import { StopTrailerField } from "@/components/loads/stop-trailer-field";
+import { MaskedMoney } from "@/components/ui/masked-money";
 import {
   drivenMiles,
   formatCardMonthDay,
@@ -14,7 +19,8 @@ import {
   stopTypeLabel,
   stopTypeNameClass,
 } from "@/lib/loads/format";
-import type { AdpEntry, DailyPayEntry, Load } from "@/types/database";
+import { formatDurationHm, shiftDurationMinutes } from "@/lib/loads/shift-time";
+import type { AdpEntry, DailyPayEntry, Load, ShiftPunch } from "@/types/database";
 import type { LoadWithStops } from "@/lib/loads/queries";
 
 export type WorkWeekDaySummary = {
@@ -23,7 +29,7 @@ export type WorkWeekDaySummary = {
   isToday: boolean;
   /** Past calendar day (before today). */
   isPast: boolean;
-  /** Biweekly payday for this driver. */
+  /** Biweekly deposit / pay-icon day (Thursday) for this driver. */
   isPayDay: boolean;
   loadCount: number;
   /** null → show "—" (e.g. active load with no pay yet). */
@@ -34,25 +40,23 @@ export type WorkWeekDaySummary = {
   includesActivePreview: boolean;
   /** Flat daily pay when the day has no loads (past empty days). */
   dailyPayAmount: number | null;
+  /** Punch times for this day (if any). */
+  punchStart: string | null;
+  punchEnd: string | null;
+  /** Complete punch duration in minutes; null if incomplete. */
+  workedMinutes: number | null;
 };
 
 export type WorkStatsSummary = {
   periodLoads: number;
   periodEarnings: number;
   periodDrivenMiles: number;
+  periodWorkedMinutes: number;
   monthLoads: number;
   monthEarnings: number;
   monthDrivenMiles: number;
+  monthWorkedMinutes: number;
 };
-
-function currency(amount: number): string {
-  return amount.toLocaleString(undefined, {
-    style: "currency",
-    currency: "USD",
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
-}
 
 function milesLabel(miles: number): string {
   return `${miles.toLocaleString(undefined, {
@@ -83,6 +87,7 @@ export function summarizeWorkWeekDays(
   > | null = null,
   dailyPayByDate: Map<string, number> = new Map(),
   payDayDate: string | null = null,
+  punchesByDate: Map<string, Pick<ShiftPunch, "start_time" | "end_time">> = new Map(),
 ): WorkWeekDaySummary[] {
   const offSet = new Set(offDays);
   const byDate = new Map<string, Load[]>();
@@ -155,6 +160,10 @@ export function summarizeWorkWeekDays(
     const dailyPayAmount =
       loadCount === 0 ? (dailyPayByDate.get(date) ?? null) : null;
 
+    const punch = punchesByDate.get(date);
+    const punchStart = punch?.start_time ?? null;
+    const punchEnd = punch?.end_time ?? null;
+
     return {
       date,
       isOffDay: offSet.has(weekday),
@@ -180,6 +189,9 @@ export function summarizeWorkWeekDays(
               : 0,
       includesActivePreview,
       dailyPayAmount,
+      punchStart,
+      punchEnd,
+      workedMinutes: shiftDurationMinutes(punchStart, punchEnd),
     };
   });
 }
@@ -241,7 +253,7 @@ export function WorkWeekHome({
   canManage: boolean;
   /** True when showing the 14-day pay period instead of a work week. */
   periodMode?: boolean;
-  /** Prompt driver to set next_pay_date on Account. */
+  /** Prompt driver to set pay period start/end on Account. */
   needsPayDate?: boolean;
 }) {
   const currentStopInfo = activeLoad
@@ -359,12 +371,64 @@ export function WorkWeekHome({
                       </span>
                     </>
                   ) : null}
+                  {currentStop.seal_record?.trim() ? (
+                    <>
+                      <span className="text-blue-800/75 dark:text-blue-200/70">
+                        {" "}
+                        · Seal{" "}
+                      </span>
+                      <span className="font-semibold tabular-nums">
+                        {currentStop.seal_record.trim()}
+                      </span>
+                    </>
+                  ) : null}
+                  {currentStop.stop_type === "store" &&
+                  currentStop.pallet_count != null ? (
+                    <>
+                      <span className="text-blue-800/75 dark:text-blue-200/70">
+                        {" "}
+                        ·{" "}
+                      </span>
+                      <span className="font-semibold tabular-nums">
+                        {currentStop.pallet_count} plt
+                      </span>
+                    </>
+                  ) : null}
+                  {currentStop.stop_type === "store" &&
+                  currentStop.position_count != null ? (
+                    <>
+                      <span className="text-blue-800/75 dark:text-blue-200/70">
+                        {" "}
+                        ·{" "}
+                      </span>
+                      <span className="font-semibold tabular-nums">
+                        {currentStop.position_count} pos
+                      </span>
+                    </>
+                  ) : null}
                 </p>
               </>
             )}
 
             {currentStop && !allStopsDeparted ? (
-              <div className="mt-2.5">
+              <div className="mt-2.5 space-y-2.5">
+                <StopSealField
+                  key={`${currentStop.id}-seal-${currentStop.seal_record ?? ""}`}
+                  stopId={currentStop.id}
+                  sealRecord={currentStop.seal_record}
+                  canEdit={canManage}
+                  variant="form"
+                />
+                {currentStop.stop_type === "store" ? (
+                  <StopStoreCountsField
+                    key={`${currentStop.id}-counts-${currentStop.pallet_count ?? ""}-${currentStop.position_count ?? ""}`}
+                    stopId={currentStop.id}
+                    palletCount={currentStop.pallet_count}
+                    positionCount={currentStop.position_count}
+                    canEdit={canManage}
+                    variant="form"
+                  />
+                ) : null}
                 <StopTrailerField
                   key={`${currentStop.id}-${currentStop.trailer_number ?? ""}`}
                   stopId={currentStop.id}
@@ -415,9 +479,10 @@ export function WorkWeekHome({
 
       {needsPayDate ? (
         <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-950 dark:border-emerald-800/70 dark:bg-emerald-950/40 dark:text-emerald-50">
-          <p className="font-medium">Set your next pay date</p>
+          <p className="font-medium">Set your pay period</p>
           <p className="mt-1 text-sm text-emerald-900/80 dark:text-emerald-100/80">
-            Unlock the 2-week pay-period view on Home.{" "}
+            Unlock the pay-period view on Home. Periods end Friday; deposit
+            shows on Thursday.{" "}
             <Link
               href="/account"
               className="font-semibold underline underline-offset-2"
@@ -442,7 +507,7 @@ export function WorkWeekHome({
             </p>
             {latestAdp ? (
               <p className="mt-0.5 text-sm font-semibold tabular-nums text-foreground">
-                {currency(Number(latestAdp.adp_amount))}
+                <MaskedMoney amount={Number(latestAdp.adp_amount)} />
               </p>
             ) : (
               <Link
@@ -486,14 +551,14 @@ export function WorkWeekHome({
           <li className="min-w-0">
             <WorkStatCard
               label={periodMode ? "Period earnings" : "Week earnings"}
-              value={currency(stats.periodEarnings)}
+              value={<MaskedMoney amount={stats.periodEarnings} />}
               hint="Loads + daily pay"
             />
           </li>
           <li className="min-w-0">
             <WorkStatCard
               label="Month earnings"
-              value={currency(stats.monthEarnings)}
+              value={<MaskedMoney amount={stats.monthEarnings} />}
               hint="Loads + daily pay"
             />
           </li>
@@ -511,6 +576,20 @@ export function WorkWeekHome({
               hint="Driven (odometer)"
             />
           </li>
+          <li className="min-w-0">
+            <WorkStatCard
+              label={periodMode ? "Period hours" : "Week hours"}
+              value={formatDurationHm(stats.periodWorkedMinutes)}
+              hint="Punches (H:MM)"
+            />
+          </li>
+          <li className="min-w-0">
+            <WorkStatCard
+              label="Month hours"
+              value={formatDurationHm(stats.monthWorkedMinutes)}
+              hint="Punches (H:MM)"
+            />
+          </li>
         </ul>
       </section>
     </div>
@@ -523,7 +602,7 @@ function WorkStatCard({
   hint,
 }: {
   label: string;
-  value: string;
+  value: ReactNode;
   hint?: string;
 }) {
   return (
@@ -552,6 +631,7 @@ function WorkWeekDayCard({
   const monthDay = formatCardMonthDay(day.date);
   const hasLoads = day.loadCount > 0;
   const canAddDailyPay = !hasLoads && day.isPast && canManage;
+  const canEditPunches = canManage;
 
   return (
     <article
@@ -579,7 +659,7 @@ function WorkWeekDayCard({
               <span aria-hidden className="text-[11px] font-bold leading-none">
                 $
               </span>
-              Pay day
+              Deposit
             </span>
           ) : null}
           {day.isOffDay && !day.isPayDay ? (
@@ -614,7 +694,7 @@ function WorkWeekDayCard({
           <div className="flex items-baseline justify-between gap-1">
             <dt className="text-muted-foreground">Earn</dt>
             <dd className="truncate font-semibold tabular-nums">
-              {day.totalEarnings == null ? "—" : currency(day.totalEarnings)}
+              <MaskedMoney amount={day.totalEarnings} />
             </dd>
           </div>
           <div className="flex items-baseline justify-between gap-1">
@@ -637,6 +717,16 @@ function WorkWeekDayCard({
           No load logged
         </p>
       )}
+
+      {canEditPunches || day.punchStart != null || day.punchEnd != null ? (
+        <ShiftPunchDayEditor
+          workDate={day.date}
+          startTime={day.punchStart}
+          endTime={day.punchEnd}
+          canEdit={canEditPunches}
+          compact
+        />
+      ) : null}
     </article>
   );
 }

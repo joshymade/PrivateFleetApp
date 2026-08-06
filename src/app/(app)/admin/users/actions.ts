@@ -69,7 +69,78 @@ export async function replyToContactRequest(input: {
 
   revalidatePath(`/admin/users/${request.driver_id}`);
   revalidatePath("/account/contact");
+  revalidatePath("/account/notifications");
   return { ok: true, message: "Reply sent." };
+}
+
+/** Admin → user message (seeds a thread when none exists). */
+export async function messageUser(input: {
+  userId: string;
+  body: string;
+}): Promise<AdminActionResult> {
+  const { session, error } = await requireAdmin();
+  if (!session) return { ok: false, error: error ?? "Admin access required." };
+
+  const body = input.body.trim();
+  if (body.length < 1) return { ok: false, error: "Enter a message." };
+  if (body.length > 4000) return { ok: false, error: "Message is too long." };
+  if (input.userId === session.userId) {
+    return { ok: false, error: "You cannot message yourself." };
+  }
+
+  const supabase = await createClient();
+  const { data: target, error: targetError } = await supabase
+    .from("profiles")
+    .select("id, role")
+    .eq("id", input.userId)
+    .maybeSingle();
+
+  if (targetError) return { ok: false, error: targetError.message };
+  if (!target) return { ok: false, error: "User not found." };
+  if (target.role === "admin") {
+    return { ok: false, error: "Message non-admin users from their profile." };
+  }
+
+  const { data: latest, error: latestError } = await supabase
+    .from("contact_requests")
+    .select("id")
+    .eq("driver_id", input.userId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (latestError) return { ok: false, error: latestError.message };
+
+  let requestId = latest?.id ?? null;
+
+  if (!requestId) {
+    const { data: seeded, error: seedError } = await supabase
+      .from("contact_requests")
+      .insert({
+        driver_id: input.userId,
+        category: "other",
+        message: "",
+        source: "admin",
+      })
+      .select("id")
+      .single();
+
+    if (seedError) return { ok: false, error: seedError.message };
+    requestId = seeded.id;
+  }
+
+  const { error: insertError } = await supabase.from("contact_replies").insert({
+    contact_request_id: requestId,
+    admin_id: session.userId,
+    body,
+  });
+
+  if (insertError) return { ok: false, error: insertError.message };
+
+  revalidatePath(`/admin/users/${input.userId}`);
+  revalidatePath("/account/contact");
+  revalidatePath("/account/notifications");
+  return { ok: true, message: "Message sent." };
 }
 
 export async function setUserDisabled(

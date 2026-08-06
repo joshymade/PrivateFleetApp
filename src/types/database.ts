@@ -20,8 +20,8 @@ export type Profile = {
    */
   identity_changes_remaining: number;
   /**
-   * Admin inbox for driver Contact Admin requests.
-   * Only meaningful / editable when role = admin.
+   * Legacy: previously used for outbound Contact Admin email.
+   * Messaging is internal now; column kept for existing rows.
    */
   admin_contact_email: string | null;
   /**
@@ -31,8 +31,14 @@ export type Profile = {
   /** Weekday numbers (0–6) the driver is normally off. Loads still allowed. */
   off_days: number[];
   /**
-   * Known payday (YYYY-MM-DD). Biweekly paydays = this date ± 14 days.
-   * Null until the driver sets it on Account.
+   * Seed start of pay period (YYYY-MM-DD, inclusive).
+   * With next_pay_date (Friday end), length drives auto-advance. Null until set.
+   */
+  pay_period_start: string | null;
+  /**
+   * Seed end of pay period (YYYY-MM-DD, Friday). Later periods = start/end + n×length.
+   * Deposit/pay icon is Thursday of that end week (derived in app, not stored).
+   * Null until the driver sets the range on Account.
    */
   next_pay_date: string | null;
   /**
@@ -117,21 +123,40 @@ export type DailyPayEntry = {
   updated_at: string;
 };
 
+/** Driver-entered start/end punch for a calendar work day (wall-clock times). */
+export type ShiftPunch = {
+  id: string;
+  driver_id: string;
+  work_date: string;
+  /** Postgres `time` as `HH:MM:SS` or `HH:MM`. */
+  start_time: string | null;
+  /** Postgres `time` as `HH:MM:SS` or `HH:MM`. End < start ⇒ overnight. */
+  end_time: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 export type ContactRequestCategory =
   | "identity"
   | "app_issue"
   | "feature"
   | "other";
 
+/** Who opened the contact thread. */
+export type ContactRequestSource = "user" | "admin";
+
 export type ContactRequest = {
   id: string;
+  /** Profile id of the non-admin participant (column name is historical). */
   driver_id: string;
   category: ContactRequestCategory;
   message: string;
+  /** user = opened by the participant; admin = Admin seeded the thread. */
+  source: ContactRequestSource;
   created_at: string;
 };
 
-/** Admin reply to a contact_request; drivers see these on Contact › Inbox. */
+/** Admin reply on a contact thread; users see these on Contact › Inbox. */
 export type ContactReply = {
   id: string;
   contact_request_id: string;
@@ -149,6 +174,12 @@ export type LoadStop = {
   stop_type: LoadStopType;
   stop_name: string;
   pickup_number: string | null;
+  /** Optional seal / sealed record for this stop. */
+  seal_record: string | null;
+  /** Optional pallet count (store stops only). */
+  pallet_count: number | null;
+  /** Optional position/movement count (store stops only). */
+  position_count: number | null;
   /** Trailer picked up at this stop; becomes current only when stop is checked. */
   trailer_number: string | null;
   delivery_order: number;
@@ -268,7 +299,9 @@ export type NotificationType =
   | "load_assigned"
   | "deletion_request"
   | "deletion_approved"
-  | "deletion_dismissed";
+  | "deletion_dismissed"
+  | "contact_message"
+  | "contact_reply";
 
 export type AppNotification = {
   id: string;
@@ -321,4 +354,29 @@ export type SafetyHomeStats = {
   pending_review: number;
   reports_24h: number;
   reports_30d: number;
+};
+
+/** Shared site setting row (`app_settings`). */
+export type AppSetting = {
+  key: string;
+  value: string;
+  updated_at: string;
+  updated_by: string | null;
+};
+
+/** Max length for one-sentence site alert bar copy. */
+export const SITE_ALERT_MESSAGE_MAX = 140;
+
+/** Admin-scheduled notice shown in the app shell when today is in range. */
+export type SiteAlert = {
+  id: string;
+  message: string;
+  /** Inclusive calendar start (`YYYY-MM-DD`). */
+  starts_on: string;
+  /** Inclusive calendar end (`YYYY-MM-DD`). */
+  ends_on: string;
+  active: boolean;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
 };

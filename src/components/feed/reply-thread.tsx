@@ -1,7 +1,7 @@
 "use client";
 
 import { Megaphone } from "lucide-react";
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useEffect, useOptimistic, useRef, useState, useTransition } from "react";
 import {
   addReply,
   beepComment,
@@ -103,16 +103,29 @@ export function ReplyThread({
   const [error, setError] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editBody, setEditBody] = useState("");
-  const [localReplies, setLocalReplies] = useState(replies);
+  const [optimisticReplies, setOptimisticReplies] = useOptimistic(
+    replies,
+    (
+      current,
+      update: { commentId: string; beeped: boolean },
+    ): FeedReply[] =>
+      current.map((r) =>
+        r.id === update.commentId
+          ? {
+              ...r,
+              beeped_by_me: update.beeped,
+              beep_count: update.beeped
+                ? r.beep_count + 1
+                : Math.max(0, r.beep_count - 1),
+            }
+          : r,
+      ),
+  );
   const composeRef = useRef<HTMLTextAreaElement>(null);
 
-  useEffect(() => {
-    setLocalReplies(replies);
-  }, [replies]);
-
-  const tree = buildReplyTree(localReplies);
+  const tree = buildReplyTree(optimisticReplies);
   const replyTo = replyToId
-    ? (localReplies.find((r) => r.id === replyToId) ?? null)
+    ? (optimisticReplies.find((r) => r.id === replyToId) ?? null)
     : null;
 
   useEffect(() => {
@@ -171,32 +184,14 @@ export function ReplyThread({
   }
 
   function onBeep(commentId: string) {
-    const current = localReplies.find((r) => r.id === commentId);
+    const current = optimisticReplies.find((r) => r.id === commentId);
     if (!current || current.beeped_by_me || pending) return;
 
     setError(null);
-    setLocalReplies((prev) =>
-      prev.map((r) =>
-        r.id === commentId
-          ? { ...r, beeped_by_me: true, beep_count: r.beep_count + 1 }
-          : r,
-      ),
-    );
-
     startTransition(async () => {
+      setOptimisticReplies({ commentId, beeped: true });
       const result = await beepComment(reportId, commentId);
       if (!result.ok) {
-        setLocalReplies((prev) =>
-          prev.map((r) =>
-            r.id === commentId
-              ? {
-                  ...r,
-                  beeped_by_me: false,
-                  beep_count: Math.max(0, r.beep_count - 1),
-                }
-              : r,
-          ),
-        );
         setError(result.error);
       }
     });

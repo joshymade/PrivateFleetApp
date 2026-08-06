@@ -25,6 +25,11 @@ import {
   safetyInboxStatusClassName,
   safetyInboxStatusLabel,
 } from "@/lib/feed/safety-status";
+import {
+  feedReportAssetLabel,
+  isTypedTrailerNumber,
+} from "@/lib/feed/trailer-unit-type";
+import { truncateFeedDescription } from "@/lib/feed/truncate";
 import { formatFeedTimestamp } from "@/lib/format-time";
 import { displayFirstOrFull } from "@/lib/profile-name";
 import { createClient } from "@/lib/supabase/server";
@@ -41,10 +46,6 @@ import type {
 type PageProps = {
   params: Promise<{ reportId: string }>;
 };
-
-function assetLabel(type: DamageReport["asset_type"]) {
-  return type === "tractor" ? "Tractor" : "Trailer";
-}
 
 export async function generateMetadata({ params }: PageProps) {
   const { reportId } = await params;
@@ -262,6 +263,14 @@ export default async function FeedReportDetailPage({ params }: PageProps) {
     (inboxReferral?.status as SafetyInboxStatus | undefined) ?? null;
   const safetyStatusLabel = safetyInboxStatusLabel(inboxStatus);
   const safetyStatusClass = safetyInboxStatusClassName(inboxStatus);
+  const typeLabel = feedReportAssetLabel(row.asset_type, row.asset_number);
+  const typedTrailer = isTypedTrailerNumber(row.asset_type, row.asset_number);
+  const numberClass =
+    row.asset_type === "tractor"
+      ? "font-bold text-brand hover:underline"
+      : typedTrailer
+        ? `font-bold ${pageTitleColorClassName} hover:underline`
+        : "font-bold text-accent hover:underline";
 
   return (
     <main className="mx-auto w-full max-w-lg px-4 pb-8 pt-4">
@@ -271,15 +280,17 @@ export default async function FeedReportDetailPage({ params }: PageProps) {
       </BackLink>
 
       <header className="mt-4">
-        <h1 className={pageTitleClassName}>
-          {assetLabel(row.asset_type)}{" "}
+        <h1
+          className={
+            typedTrailer
+              ? "text-2xl font-semibold tracking-tight text-foreground"
+              : pageTitleClassName
+          }
+        >
+          {typeLabel}{" "}
           <Link
             href={feedUnitHref(row.asset_number)}
-            className={
-              row.asset_type === "tractor"
-                ? "font-bold text-brand hover:underline"
-                : "font-bold text-accent hover:underline"
-            }
+            className={numberClass}
             title={`All damage reports for ${row.asset_number}`}
           >
             {row.asset_number}
@@ -333,7 +344,7 @@ export default async function FeedReportDetailPage({ params }: PageProps) {
       {photoUrls.length > 0 ? (
         <ReportPhotoGallery
           urls={photoUrls}
-          altPrefix={`${assetLabel(row.asset_type)} ${row.asset_number} damage`}
+          altPrefix={`${typeLabel} ${row.asset_number} damage`}
         />
       ) : (
         <div className="mt-4 flex h-48 items-center justify-center rounded-lg bg-muted text-sm text-muted-foreground">
@@ -341,62 +352,48 @@ export default async function FeedReportDetailPage({ params }: PageProps) {
         </div>
       )}
 
-      {hasLocation || safetyStatusLabel || noticeCount > 0 ? (
-        <dl className="mt-4 grid gap-2 text-sm">
-          <div className="flex justify-between gap-4">
-            {safetyStatusLabel || noticeCount > 0 ? (
-              <dt className="flex flex-col gap-1 text-muted-foreground">
-                {safetyStatusLabel ? (
-                  inboxStatus === "pending" ? (
-                    <ClickableTooltip
-                      ariaLabel="Safety Notified: learn more"
-                      className={safetyStatusClass}
-                      content="This damage report was submitted to the Safety Team by the reporting driver."
-                    >
-                      {safetyStatusLabel}
-                    </ClickableTooltip>
-                  ) : (
-                    <span className={safetyStatusClass}>
-                      {safetyStatusLabel}
-                    </span>
-                  )
-                ) : null}
-                {noticeCount > 0 ? (
-                  <span
-                    className="inline-flex items-center gap-1"
-                    title={`${noticeCount} noticed`}
-                  >
-                    <ThumbsUp className="size-3.5 shrink-0" aria-hidden />
-                    <span>{noticeCount}</span>
-                    <span className="sr-only">noticed</span>
-                  </span>
-                ) : null}
-              </dt>
+      <dl className="mt-4 grid gap-2 text-sm">
+        <div className="flex justify-between gap-4">
+          <dt className="flex flex-col gap-1 text-muted-foreground">
+            {inboxStatus === "pending" ? (
+              <ClickableTooltip
+                ariaLabel="Safety Notified: learn more"
+                className={safetyStatusClass}
+                content="This damage report was submitted to the Safety Team by the reporting driver."
+              >
+                {safetyStatusLabel}
+              </ClickableTooltip>
             ) : (
-              <dt className="sr-only">Location</dt>
+              <span className={safetyStatusClass}>{safetyStatusLabel}</span>
             )}
-            <dd
-              className={
-                safetyStatusLabel || noticeCount > 0 ? undefined : "ml-auto"
-              }
-            >
-              {hasLocation ? (
-                <LocationLink
-                  latitude={row.latitude}
-                  longitude={row.longitude}
-                  empty="hide"
-                />
-              ) : null}
-            </dd>
-          </div>
-        </dl>
-      ) : null}
+            {noticeCount > 0 ? (
+              <span
+                className="inline-flex items-center gap-1"
+                title={`${noticeCount} noticed`}
+              >
+                <ThumbsUp className="size-3.5 shrink-0" aria-hidden />
+                <span>{noticeCount}</span>
+                <span className="sr-only">noticed</span>
+              </span>
+            ) : null}
+          </dt>
+          <dd>
+            {hasLocation ? (
+              <LocationLink
+                latitude={row.latitude}
+                longitude={row.longitude}
+                empty="hide"
+              />
+            ) : null}
+          </dd>
+        </div>
+      </dl>
 
       {row.report_comment?.trim() ? (
         <section className="mt-4">
           <h2 className="text-sm font-medium text-muted-foreground">Reported Damage or Issue</h2>
           <p className="mt-1 whitespace-pre-wrap text-sm text-foreground">
-            {row.report_comment.trim()}
+            {truncateFeedDescription(row.report_comment.trim())}
           </p>
         </section>
       ) : null}

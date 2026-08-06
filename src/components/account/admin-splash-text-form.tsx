@@ -2,20 +2,21 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { updateAdminContactEmail } from "@/app/(app)/account/actions";
+import { updateSplashText } from "@/app/(app)/account/actions";
+import { DEFAULT_SPLASH_TEXT } from "@/lib/splash";
 
 type Props = {
-  initialEmail: string | null;
+  initialText: string;
 };
 
-export function AdminContactEmailForm({ initialEmail }: Props) {
+export function AdminSplashTextForm({ initialText }: Props) {
   const router = useRouter();
-  const [email, setEmail] = useState(initialEmail ?? "");
+  const [text, setText] = useState(initialText);
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
 
-  const dirty = email.trim() !== (initialEmail ?? "").trim();
+  const dirty = text.trim() !== initialText.trim();
 
   function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -23,7 +24,7 @@ export function AdminContactEmailForm({ initialEmail }: Props) {
     setSaved(false);
 
     startTransition(async () => {
-      const result = await updateAdminContactEmail(email.trim() || null);
+      const result = await updateSplashText(text);
       if (!result.ok) {
         setError(result.error);
         return;
@@ -36,32 +37,30 @@ export function AdminContactEmailForm({ initialEmail }: Props) {
   return (
     <form onSubmit={onSubmit} className="flex flex-col gap-3">
       <label className="flex flex-col gap-1.5 text-sm">
-        <span className="text-muted-foreground">
-          Contact email for driver requests
-        </span>
-        <input
-          type="email"
-          name="admin_contact_email"
-          value={email}
+        <span className="text-muted-foreground">Splash screen description</span>
+        <textarea
+          name="splash_text"
+          value={text}
           onChange={(e) => {
-            setEmail(e.target.value);
+            setText(e.target.value);
             setSaved(false);
           }}
-          autoComplete="email"
-          placeholder="admin@example.com"
-          className="min-h-11 rounded-lg border border-input bg-card px-3 text-sm text-foreground outline-none focus:border-ring focus:ring-2 focus:ring-ring/30"
+          rows={4}
+          maxLength={2000}
+          placeholder={DEFAULT_SPLASH_TEXT}
+          className="min-h-24 rounded-lg border border-input bg-card px-3 py-2.5 text-sm text-foreground outline-none focus:border-ring focus:ring-2 focus:ring-ring/30"
         />
       </label>
       <p className="text-xs text-muted-foreground">
-        Drivers use Contact Admin when they need another name or work-state
-        change. Requests go to every admin who sets this address.
+        Shown on the app splash before Enter. Leave blank to use the default
+        description. Max 2000 characters.
       </p>
       <button
         type="submit"
         disabled={pending || !dirty}
         className="min-h-11 self-start rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground disabled:opacity-50"
       >
-        {pending ? "Saving…" : "Save contact email"}
+        {pending ? "Saving…" : "Save splash text"}
       </button>
       {error ? <p className="text-xs text-destructive">{error}</p> : null}
       {saved ? <p className="text-xs text-brand">Saved.</p> : null}

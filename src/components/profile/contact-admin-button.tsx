@@ -4,16 +4,11 @@ import { useState } from "react";
 import { ContactAdminModal } from "@/components/profile/contact-admin-modal";
 
 type Props = {
-  defaultEmail: string;
   driverId: string | null;
   className?: string;
 };
 
-export function ContactAdminButton({
-  defaultEmail,
-  driverId,
-  className,
-}: Props) {
+export function ContactAdminButton({ driverId, className }: Props) {
   const [open, setOpen] = useState(false);
 
   return (
@@ -31,7 +26,6 @@ export function ContactAdminButton({
       {open ? (
         <ContactAdminModal
           onClose={() => setOpen(false)}
-          defaultEmail={defaultEmail}
           driverId={driverId}
         />
       ) : null}

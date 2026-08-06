@@ -1,3 +1,5 @@
+import { MaskedMoney } from "@/components/ui/masked-money";
+import { formatDurationHm } from "@/lib/loads/shift-time";
 import type { MonthLoadTotals } from "@/lib/loads/queries";
 
 function formatMiles(n: number): string {
@@ -14,15 +16,13 @@ export function LoadsMonthTotals({ totals }: { totals: MonthLoadTotals }) {
         <div>
           <dt className="text-muted-foreground">Latest ADP</dt>
           <dd className="mt-0.5 text-lg font-semibold tabular-nums text-foreground">
-            {totals.latestAdp != null
-              ? `$${totals.latestAdp.toFixed(2)}`
-              : "—"}
+            <MaskedMoney amount={totals.latestAdp} />
           </dd>
         </div>
         <div>
           <dt className="text-muted-foreground">Earnings</dt>
           <dd className="mt-0.5 text-lg font-semibold tabular-nums text-foreground">
-            ${totals.earnings.toFixed(2)}
+            <MaskedMoney amount={totals.earnings} />
           </dd>
         </div>
         <div>
@@ -35,6 +35,12 @@ export function LoadsMonthTotals({ totals }: { totals: MonthLoadTotals }) {
           <dt className="text-muted-foreground">Completed loads</dt>
           <dd className="mt-0.5 text-lg font-semibold tabular-nums text-foreground">
             {totals.completedLoads}
+          </dd>
+        </div>
+        <div>
+          <dt className="text-muted-foreground">Hours worked</dt>
+          <dd className="mt-0.5 text-lg font-semibold tabular-nums text-foreground">
+            {formatDurationHm(totals.workedMinutes)}
           </dd>
         </div>
       </dl>

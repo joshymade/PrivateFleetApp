@@ -222,45 +222,132 @@ export function addCalendarDays(dateStr: string, delta: number): string {
   return toDateString(new Date(y, m - 1, d + delta));
 }
 
+/** Sunday=0 … Saturday=6 for a local YYYY-MM-DD calendar date. */
+export function weekdayOf(dateStr: string): number {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  return new Date(y, m - 1, d).getDay();
+}
+
+/** Checks are deposited on Thursday (week-view pay icon). */
+export const DEPOSIT_WEEKDAY = 4;
+
+/** Pay periods end on Friday. */
+export const PERIOD_END_WEEKDAY = 5;
+
+/** @deprecated Use {@link DEPOSIT_WEEKDAY}. */
+export const PAYDAY_WEEKDAY = DEPOSIT_WEEKDAY;
+
 /**
- * True when `dateStr` falls on the biweekly payday grid anchored at `anchorPayDate`.
- * Example anchors: 2026-06-04, 2026-06-18, 2026-07-02, 2026-07-16, 2026-07-30 (Thursdays).
+ * Deposit (pay icon) day for a period ending on `periodEnd`.
+ * Thursday of the same calendar week as the period end (Friday end → prior day).
  */
-export function isPayDay(dateStr: string, anchorPayDate: string): boolean {
-  const diff = calendarDaysBetween(dateStr, anchorPayDate);
-  return ((diff % 14) + 14) % 14 === 0;
+export function depositDayForPeriodEnd(periodEnd: string): string {
+  const wd = weekdayOf(periodEnd);
+  const back = (wd - DEPOSIT_WEEKDAY + 7) % 7;
+  return addCalendarDays(periodEnd, -back);
+}
+
+/** Inclusive day count from start through end. */
+export function payPeriodLengthDays(start: string, end: string): number {
+  return calendarDaysBetween(end, start) + 1;
 }
 
 /**
- * Next payday on or after `today` using the biweekly grid from `anchorPayDate`.
+ * True when `dateStr` falls on the deposit-day grid anchored at `anchorDepositDate`
+ * (typically a Thursday), stepping by period length.
  */
-export function upcomingPayDay(today: string, anchorPayDate: string): string {
-  const diff = calendarDaysBetween(today, anchorPayDate);
-  const mod = ((diff % 14) + 14) % 14;
+export function isPayDay(
+  dateStr: string,
+  anchorDepositDate: string,
+  periodLengthDays = 14,
+): boolean {
+  if (periodLengthDays < 1) return false;
+  const diff = calendarDaysBetween(dateStr, anchorDepositDate);
+  return ((diff % periodLengthDays) + periodLengthDays) % periodLengthDays === 0;
+}
+
+/**
+ * Next deposit day on or after `today` using the period-length grid from
+ * `anchorDepositDate` (Thursday deposit).
+ */
+export function upcomingPayDay(
+  today: string,
+  anchorDepositDate: string,
+  periodLengthDays = 14,
+): string {
+  if (periodLengthDays < 1) return anchorDepositDate;
+  const diff = calendarDaysBetween(today, anchorDepositDate);
+  const mod = ((diff % periodLengthDays) + periodLengthDays) % periodLengthDays;
   if (mod === 0) return today;
-  return addCalendarDays(today, 14 - mod);
+  return addCalendarDays(today, periodLengthDays - mod);
 }
 
 export type PayPeriod = {
   start: string;
   end: string;
-  /** 14 YYYY-MM-DD dates from start through payday (inclusive). */
+  /** YYYY-MM-DD dates from start through end (inclusive). */
   days: string[];
+  /**
+   * Deposit / pay-icon day (Thursday of the week containing period end).
+   * Not the same as `end` (Friday).
+   */
   payDay: string;
+  /** Inclusive length in days (from seed). */
+  lengthDays: number;
 };
 
 /**
- * Current pay period: 14 days ending on the upcoming payday (inclusive).
- * e.g. payday Jul 30 → Jul 17 … Jul 30.
+ * Current pay period from a driver-seeded start/end range.
+ * Advances contiguous periods of the same length until `today` falls in one
+ * (or the next upcoming period if `today` is before the seed).
+ * Period end is Friday; `payDay` is the Thursday deposit in that end week.
  */
 export function currentPayPeriod(
   today: string,
-  anchorPayDate: string,
+  seedStart: string,
+  seedEnd: string,
 ): PayPeriod {
-  const payDay = upcomingPayDay(today, anchorPayDate);
-  const start = addCalendarDays(payDay, -13);
-  const days = Array.from({ length: 14 }, (_, i) => addCalendarDays(start, i));
-  return { start, end: payDay, days, payDay };
+  const lengthDays = payPeriodLengthDays(seedStart, seedEnd);
+  if (lengthDays < 1) {
+    const days = [seedStart];
+    return {
+      start: seedStart,
+      end: seedEnd,
+      days,
+      payDay: depositDayForPeriodEnd(seedEnd),
+      lengthDays: 1,
+    };
+  }
+
+  const offset = calendarDaysBetween(today, seedStart);
+  const periodIndex =
+    offset < 0 ? 0 : Math.floor(offset / lengthDays);
+
+  const start = addCalendarDays(seedStart, periodIndex * lengthDays);
+  const end = addCalendarDays(seedEnd, periodIndex * lengthDays);
+  const days = Array.from({ length: lengthDays }, (_, i) =>
+    addCalendarDays(start, i),
+  );
+  return {
+    start,
+    end,
+    days,
+    payDay: depositDayForPeriodEnd(end),
+    lengthDays,
+  };
+}
+
+/**
+ * @deprecated Prefer seed start/end via {@link currentPayPeriod}.
+ * Legacy: 14-day window ending on a Friday period-end anchor.
+ */
+export function currentPayPeriodFromAnchor(
+  today: string,
+  anchorPeriodEnd: string,
+): PayPeriod {
+  const end = upcomingPayDay(today, anchorPeriodEnd, 14);
+  const start = addCalendarDays(end, -13);
+  return currentPayPeriod(today, start, end);
 }
 
 export function formatPayPeriodLabel(start: string, end: string): string {

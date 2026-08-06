@@ -373,7 +373,7 @@ Drivers set region (1–6) once in Account settings (then locked). Admin assigns
 | Supabase anon / publishable + service keys | **You** | SET in `.env.local` |
 | `R2_*` API keys + bucket | **You** | Done / verified |
 | `R2_PUBLIC_URL` | **You** | Done — public `*.r2.dev` base |
-| `RESEND_API_KEY` / `RESEND_FROM_EMAIL` | **You** | Needed for Contact Admin email (see easypanel-deploy) |
+| Contact Admin | **Internal DB messaging** | `contact_requests` / `contact_replies` — no Resend |
 
 Full checklists: [supabase-env-checklist.md](docs/supabase-env-checklist.md), [r2-setup.md](docs/r2-setup.md), [easypanel-deploy.md](docs/easypanel-deploy.md).
 

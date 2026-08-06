@@ -78,19 +78,6 @@ export function DamageCaptureForm({
 
   const currentLoad = recentLoads.find((l) => l.isCurrent) ?? null;
 
-  useEffect(() => {
-    setAssetType(initialAssetType);
-  }, [initialAssetType]);
-
-  useEffect(() => {
-    if (!submittedId) return;
-    setAssetNumber("");
-    setReportComment("");
-    setSelectedLoadId("");
-    setPhotos([]);
-    setError(null);
-  }, [submittedId]);
-
   function handleAssetTypeChange(next: AssetType) {
     if (next === assetType) return;
     setAssetType(next);

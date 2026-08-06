@@ -4,7 +4,7 @@ import { FeedPagination } from "@/components/feed/feed-pagination";
 import { FeedReportCard } from "@/components/feed/feed-report-card";
 import { FeedSearch } from "@/components/feed/feed-search";
 import { BackLink } from "@/components/nav/back-link";
-import { pageTitleClassName } from "@/components/ui/page-title";
+import { pageTitleClassName, pageTitleColorClassName } from "@/components/ui/page-title";
 import { damagePhotoUrl } from "@/lib/damage-photo";
 import {
   assetNumberDigits,
@@ -12,6 +12,12 @@ import {
   displayAssetNumberFromReports,
   feedUnitHref,
 } from "@/lib/feed/asset-number";
+import {
+  feedReportAssetLabel,
+  isTypedTrailerNumber,
+  trailerUnitKindFromNumber,
+  trailerUnitKindLabel,
+} from "@/lib/feed/trailer-unit-type";
 import { createClient } from "@/lib/supabase/server";
 import type {
   AssetType,
@@ -135,12 +141,26 @@ export default async function FeedUnitPage({ params, searchParams }: PageProps) 
     rows.map((r) => r.asset_number),
   );
   const assetType = rows[0]?.asset_type as AssetType | undefined;
+  const inferredKind =
+    assetType == null ? trailerUnitKindFromNumber(displayNumber) : null;
+  const typedTrailer =
+    assetType != null
+      ? isTypedTrailerNumber(assetType, displayNumber)
+      : inferredKind != null;
+  const typeLabel =
+    assetType != null
+      ? feedReportAssetLabel(assetType, displayNumber)
+      : inferredKind
+        ? trailerUnitKindLabel(inferredKind)
+        : null;
   const numberClass =
     assetType === "tractor"
       ? "font-bold text-brand"
-      : assetType === "trailer"
-        ? "font-bold text-accent"
-        : "font-bold text-foreground";
+      : typedTrailer
+        ? `font-bold ${pageTitleColorClassName}`
+        : assetType === "trailer"
+          ? "font-bold text-accent"
+          : "font-bold text-foreground";
 
   const reportIds = rows.map((r) => r.id);
   const reporterIds = [...new Set(rows.map((r) => r.reported_by))];
@@ -210,14 +230,27 @@ export default async function FeedUnitPage({ params, searchParams }: PageProps) 
         <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
           Feed
         </p>
-        <h1 className={pageTitleClassName}>
-          <span className={numberClass}>{displayNumber}</span>
+        <h1
+          className={
+            typedTrailer
+              ? "text-2xl font-semibold tracking-tight text-foreground"
+              : pageTitleClassName
+          }
+        >
+          {typeLabel ? (
+            <>
+              <span>{typeLabel} </span>
+              <span className={numberClass}>{displayNumber}</span>
+            </>
+          ) : (
+            <span className={numberClass}>{displayNumber}</span>
+          )}
         </h1>
         <p className="mt-1 text-sm text-muted-foreground">
           All damage reports for this{" "}
           {assetType === "tractor"
             ? "tractor"
-            : assetType === "trailer"
+            : assetType === "trailer" || inferredKind
               ? "trailer"
               : "unit"}
           .

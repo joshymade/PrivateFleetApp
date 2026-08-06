@@ -3,10 +3,6 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { isProfileComplete } from "@/lib/auth/profile-complete";
-import {
-  sendDriverContactAdminEmail,
-  sendDriverContactRequestEmail,
-} from "@/lib/email/resend";
 import { composeFullName } from "@/lib/profile-name";
 import { createClient } from "@/lib/supabase/server";
 import {
@@ -15,7 +11,10 @@ import {
   TRACTOR_NUMBER_PLACEHOLDER,
 } from "@/lib/tractor-number";
 import { isUsStateCode } from "@/lib/us-states";
-import type { ContactRequestCategory } from "@/types/database";
+import {
+  SITE_ALERT_MESSAGE_MAX,
+  type ContactRequestCategory,
+} from "@/types/database";
 
 export type ActionResult =
   | { ok: true; profileComplete?: boolean }
@@ -48,6 +47,11 @@ function revalidateAccountSurfaces() {
   revalidatePath("/account", "layout");
   revalidatePath("/home");
   revalidatePath("/loads");
+}
+
+function revalidateSplashSurfaces() {
+  revalidatePath("/");
+  revalidatePath("/account");
 }
 
 function revalidateNotificationSurfaces() {
@@ -203,8 +207,8 @@ export async function updateProfileWorkState(
   return { ok: true, profileComplete: isProfileComplete(updated) };
 }
 
-export async function updateAdminContactEmail(
-  contactEmail: string | null,
+export async function updateSplashText(
+  splashText: string,
 ): Promise<ActionResult> {
   const { supabase, user, error } = await requireUser();
   if (!user) return { ok: false, error: error ?? "Sign in required." };
@@ -216,24 +220,115 @@ export async function updateAdminContactEmail(
     .maybeSingle();
 
   if (profile?.role !== "admin") {
-    return { ok: false, error: "Only admins can set a contact email." };
+    return { ok: false, error: "Only admins can edit splash text." };
   }
 
-  const normalized =
-    contactEmail && contactEmail.trim() ? contactEmail.trim() : null;
-
-  if (normalized && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized)) {
-    return { ok: false, error: "Enter a valid email address." };
+  const value = splashText.trim();
+  if (value.length > 2000) {
+    return { ok: false, error: "Splash text must be 2000 characters or fewer." };
   }
 
-  const { error: updateError } = await supabase
+  const { error: upsertError } = await supabase.from("app_settings").upsert(
+    {
+      key: "splash_text",
+      value,
+      updated_at: new Date().toISOString(),
+      updated_by: user.id,
+    },
+    { onConflict: "key" },
+  );
+
+  if (upsertError) return { ok: false, error: upsertError.message };
+
+  revalidateSplashSurfaces();
+  return { ok: true };
+}
+
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+export async function createSiteAlert(input: {
+  message: string;
+  startsOn: string;
+  endsOn: string;
+}): Promise<ActionResult> {
+  const { supabase, user, error } = await requireUser();
+  if (!user) return { ok: false, error: error ?? "Sign in required." };
+
+  const { data: profile } = await supabase
     .from("profiles")
-    .update({ admin_contact_email: normalized })
-    .eq("id", user.id);
+    .select("role")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  if (profile?.role !== "admin") {
+    return { ok: false, error: "Only admins can publish site notices." };
+  }
+
+  const message = input.message.trim();
+  if (message.length < 1) {
+    return { ok: false, error: "Enter a notice." };
+  }
+  if (message.length > SITE_ALERT_MESSAGE_MAX) {
+    return {
+      ok: false,
+      error: `Notice must be ${SITE_ALERT_MESSAGE_MAX} characters or fewer.`,
+    };
+  }
+  if (!DATE_RE.test(input.startsOn) || !DATE_RE.test(input.endsOn)) {
+    return { ok: false, error: "Choose valid start and end dates." };
+  }
+  if (input.endsOn < input.startsOn) {
+    return { ok: false, error: "End date must be on or after start date." };
+  }
+
+  const now = new Date().toISOString();
+  const { error: insertError } = await supabase.from("site_alerts").insert({
+    message,
+    starts_on: input.startsOn,
+    ends_on: input.endsOn,
+    active: true,
+    created_by: user.id,
+    created_at: now,
+    updated_at: now,
+  });
+
+  if (insertError) return { ok: false, error: insertError.message };
+
+  revalidatePath("/", "layout");
+  return { ok: true };
+}
+
+export async function setSiteAlertActive(
+  alertId: string,
+  active: boolean,
+): Promise<ActionResult> {
+  const { supabase, user, error } = await requireUser();
+  if (!user) return { ok: false, error: error ?? "Sign in required." };
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  if (profile?.role !== "admin") {
+    return { ok: false, error: "Only admins can update site notices." };
+  }
+
+  const { data, error: updateError } = await supabase
+    .from("site_alerts")
+    .update({
+      active,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", alertId)
+    .select("id")
+    .maybeSingle();
 
   if (updateError) return { ok: false, error: updateError.message };
+  if (!data) return { ok: false, error: "Notice not found." };
 
-  revalidateAccountSurfaces();
+  revalidatePath("/", "layout");
   return { ok: true };
 }
 
@@ -272,39 +367,126 @@ export async function updateDriverWeekPrefs(input: {
   return { ok: true };
 }
 
-export async function updateNextPayDate(input: {
+function parseLocalDateInput(
+  raw: string,
+  label: string,
+): { ok: true; value: string } | { ok: false; error: string } {
+  const trimmed = raw.trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+    return { ok: false, error: `Enter a valid ${label}.` };
+  }
+  const [y, m, d] = trimmed.split("-").map(Number);
+  const parsed = new Date(y, m - 1, d);
+  if (
+    parsed.getFullYear() !== y ||
+    parsed.getMonth() !== m - 1 ||
+    parsed.getDate() !== d
+  ) {
+    return { ok: false, error: `Enter a valid ${label}.` };
+  }
+  return { ok: true, value: trimmed };
+}
+
+/** Drivers set seed start/end; period end must be Friday; length multiple of 7. */
+export async function updatePayPeriod(input: {
+  payPeriodStart: string | null;
   nextPayDate: string | null;
 }): Promise<ActionResult> {
   const { supabase, user, error } = await requireUser();
   if (!user) return { ok: false, error: error ?? "Sign in required." };
 
-  const raw = input.nextPayDate?.trim() ?? "";
-  let nextPayDate: string | null = null;
-  if (raw) {
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
-      return { ok: false, error: "Enter a valid pay date." };
-    }
-    const [y, m, d] = raw.split("-").map(Number);
-    const parsed = new Date(y, m - 1, d);
-    if (
-      parsed.getFullYear() !== y ||
-      parsed.getMonth() !== m - 1 ||
-      parsed.getDate() !== d
-    ) {
-      return { ok: false, error: "Enter a valid pay date." };
-    }
-    nextPayDate = raw;
+  const startRaw = input.payPeriodStart?.trim() ?? "";
+  const endRaw = input.nextPayDate?.trim() ?? "";
+
+  if (!startRaw && !endRaw) {
+    const { error: updateError } = await supabase
+      .from("profiles")
+      .update({ pay_period_start: null, next_pay_date: null })
+      .eq("id", user.id);
+    if (updateError) return { ok: false, error: updateError.message };
+    revalidateAccountSurfaces();
+    return { ok: true };
+  }
+
+  if (!startRaw || !endRaw) {
+    return {
+      ok: false,
+      error: "Set both pay period start and end, or clear both.",
+    };
+  }
+
+  const startParsed = parseLocalDateInput(startRaw, "period start date");
+  if (!startParsed.ok) return startParsed;
+  const endParsed = parseLocalDateInput(endRaw, "period end date");
+  if (!endParsed.ok) return endParsed;
+
+  const payPeriodStart = startParsed.value;
+  const nextPayDate = endParsed.value;
+
+  if (nextPayDate < payPeriodStart) {
+    return { ok: false, error: "Period end must be on or after start." };
+  }
+
+  const [ey, em, ed] = nextPayDate.split("-").map(Number);
+  const endWeekday = new Date(ey, em - 1, ed).getDay();
+  // Friday = 5
+  if (endWeekday !== 5) {
+    return {
+      ok: false,
+      error: "Period end must be a Friday.",
+    };
+  }
+
+  const [sy, sm, sd] = payPeriodStart.split("-").map(Number);
+  const startUtc = Date.UTC(sy, sm - 1, sd);
+  const endUtc = Date.UTC(ey, em - 1, ed);
+  const lengthDays = Math.round((endUtc - startUtc) / 86_400_000) + 1;
+
+  if (lengthDays < 7 || lengthDays > 28) {
+    return {
+      ok: false,
+      error: "Pay period must be between 7 and 28 days (inclusive).",
+    };
+  }
+  if (lengthDays % 7 !== 0) {
+    return {
+      ok: false,
+      error:
+        "Period length must be a whole number of weeks (7, 14, 21, or 28 days) so period end stays Friday.",
+    };
   }
 
   const { error: updateError } = await supabase
     .from("profiles")
-    .update({ next_pay_date: nextPayDate })
+    .update({
+      pay_period_start: payPeriodStart,
+      next_pay_date: nextPayDate,
+    })
     .eq("id", user.id);
 
   if (updateError) return { ok: false, error: updateError.message };
 
   revalidateAccountSurfaces();
   return { ok: true };
+}
+
+/** @deprecated Prefer updatePayPeriod. */
+export async function updateNextPayDate(input: {
+  nextPayDate: string | null;
+}): Promise<ActionResult> {
+  const raw = input.nextPayDate?.trim() ?? "";
+  if (!raw) {
+    return updatePayPeriod({ payPeriodStart: null, nextPayDate: null });
+  }
+  const endParsed = parseLocalDateInput(raw, "pay date");
+  if (!endParsed.ok) return endParsed;
+  const [y, m, d] = endParsed.value.split("-").map(Number);
+  const start = new Date(y, m - 1, d - 13);
+  const payPeriodStart = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, "0")}-${String(start.getDate()).padStart(2, "0")}`;
+  return updatePayPeriod({
+    payPeriodStart,
+    nextPayDate: endParsed.value,
+  });
 }
 
 export async function updateCurrentTruckNumber(input: {
@@ -432,18 +614,13 @@ export async function createAdpEntry(input: {
 }
 
 export async function contactAdminAboutIdentity(input: {
-  email: string;
   message: string;
 }): Promise<ActionResult> {
   const { supabase, user, error } = await requireUser();
   if (!user) return { ok: false, error: error ?? "Sign in required." };
 
-  const email = input.email.trim();
   const message = input.message.trim();
 
-  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    return { ok: false, error: "Enter a valid email address." };
-  }
   if (message.length < 5) {
     return { ok: false, error: "Please include a short message for Admin." };
   }
@@ -453,7 +630,7 @@ export async function contactAdminAboutIdentity(input: {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("role, driver_id, full_name, identity_changes_remaining")
+    .select("role")
     .eq("id", user.id)
     .maybeSingle();
 
@@ -461,56 +638,27 @@ export async function contactAdminAboutIdentity(input: {
     return { ok: false, error: "Only drivers can send this request." };
   }
 
-  const { data: admins, error: adminError } = await supabase
-    .from("profiles")
-    .select("admin_contact_email")
-    .eq("role", "admin")
-    .not("admin_contact_email", "is", null);
-
-  if (adminError) return { ok: false, error: adminError.message };
-
-  const to = [
-    ...new Set(
-      (admins ?? [])
-        .map((a) => a.admin_contact_email?.trim())
-        .filter((v): v is string => Boolean(v)),
-    ),
-  ];
-
-  if (to.length === 0) {
-    return {
-      ok: false,
-      error: "Admin has not configured a contact email yet.",
-    };
-  }
-
-  await supabase.from("contact_requests").insert({
+  const { error: insertError } = await supabase.from("contact_requests").insert({
     driver_id: user.id,
     category: "identity",
     message,
+    source: "user",
   });
 
-  const sent = await sendDriverContactAdminEmail({
-    to,
-    driverEmail: email,
-    driverId: profile.driver_id ?? null,
-    driverDisplayName: profile.full_name ?? null,
-    message,
-  });
+  if (insertError) return { ok: false, error: insertError.message };
 
-  if (!sent.ok) return sent;
+  revalidatePath("/account/contact");
+  revalidatePath("/admin/users");
   return { ok: true };
 }
 
 export async function submitContactRequest(input: {
-  email: string;
   category: ContactRequestCategory;
   message: string;
 }): Promise<ActionResult> {
   const { supabase, user, error } = await requireUser();
   if (!user) return { ok: false, error: error ?? "Sign in required." };
 
-  const email = input.email.trim();
   const message = input.message.trim();
   const category = input.category;
 
@@ -523,9 +671,6 @@ export async function submitContactRequest(input: {
   if (!allowed.includes(category)) {
     return { ok: false, error: "Choose a valid category." };
   }
-  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    return { ok: false, error: "Enter a valid email address." };
-  }
   if (message.length < 5) {
     return { ok: false, error: "Please include a short message." };
   }
@@ -533,53 +678,17 @@ export async function submitContactRequest(input: {
     return { ok: false, error: "Message is too long." };
   }
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("role, driver_id, full_name")
-    .eq("id", user.id)
-    .maybeSingle();
-
-  const { data: admins, error: adminError } = await supabase
-    .from("profiles")
-    .select("admin_contact_email")
-    .eq("role", "admin")
-    .not("admin_contact_email", "is", null);
-
-  if (adminError) return { ok: false, error: adminError.message };
-
-  const to = [
-    ...new Set(
-      (admins ?? [])
-        .map((a) => a.admin_contact_email?.trim())
-        .filter((v): v is string => Boolean(v)),
-    ),
-  ];
-
-  if (to.length === 0) {
-    return {
-      ok: false,
-      error: "Admin has not configured a contact email yet.",
-    };
-  }
-
   const { error: insertError } = await supabase.from("contact_requests").insert({
     driver_id: user.id,
     category,
     message,
+    source: "user",
   });
 
   if (insertError) return { ok: false, error: insertError.message };
 
-  const sent = await sendDriverContactRequestEmail({
-    to,
-    driverEmail: email,
-    driverId: profile?.driver_id ?? null,
-    driverDisplayName: profile?.full_name ?? null,
-    category,
-    message,
-  });
-
-  if (!sent.ok) return sent;
+  revalidatePath("/account/contact");
+  revalidatePath("/admin/users");
   return { ok: true };
 }
 

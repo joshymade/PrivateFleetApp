@@ -5,9 +5,12 @@ import { CompleteLoadButton } from "@/components/loads/complete-load-button";
 import { EditPayAmount } from "@/components/loads/edit-pay-amount";
 import { LoadLabel } from "@/components/loads/load-label";
 import { StopCompletedToggle } from "@/components/loads/stop-completed-toggle";
+import { StopSealField } from "@/components/loads/stop-seal-field";
+import { StopStoreCountsField } from "@/components/loads/stop-store-counts-field";
 import { StopTrailerField } from "@/components/loads/stop-trailer-field";
 import { BackLink } from "@/components/nav/back-link";
 import { DriverId, driverIdClassName } from "@/components/ui/driver-id";
+import { MaskedMoney } from "@/components/ui/masked-money";
 import { pageTitleClassName } from "@/components/ui/page-title";
 import { drivenMiles, formatLongDate, isPayAmountEditable } from "@/lib/loads/date";
 import {
@@ -98,9 +101,11 @@ export default async function LoadDetailPage({
           <div>
             <dt className="text-muted-foreground">Pay amount</dt>
             <dd className="mt-0.5 font-medium text-foreground">
-              {load.pay_amount != null
-                ? `$${Number(load.pay_amount).toFixed(2)}`
-                : "—"}
+              <MaskedMoney
+                amount={
+                  load.pay_amount != null ? Number(load.pay_amount) : null
+                }
+              />
             </dd>
             {canManage &&
             load.status === "completed" &&
@@ -178,7 +183,38 @@ export default async function LoadDetailPage({
                       </span>
                     </>
                   ) : null}
+                  {stop.seal_record?.trim() ? (
+                    <>
+                      <span className="text-muted-foreground"> · Seal </span>
+                      <span className={driverIdClassName}>
+                        {stop.seal_record.trim()}
+                      </span>
+                    </>
+                  ) : null}
                 </StopCompletedToggle>
+                <StopSealField
+                  key={`${stop.id}-seal-${stop.seal_record ?? ""}`}
+                  stopId={stop.id}
+                  sealRecord={stop.seal_record}
+                  canEdit={
+                    canManage &&
+                    (load.status === "active" || load.status === "pending")
+                  }
+                  variant="page"
+                />
+                {stop.stop_type === "store" ? (
+                  <StopStoreCountsField
+                    key={`${stop.id}-counts-${stop.pallet_count ?? ""}-${stop.position_count ?? ""}`}
+                    stopId={stop.id}
+                    palletCount={stop.pallet_count}
+                    positionCount={stop.position_count}
+                    canEdit={
+                      canManage &&
+                      (load.status === "active" || load.status === "pending")
+                    }
+                    variant="page"
+                  />
+                ) : null}
                 <StopTrailerField
                   key={`${stop.id}-${stop.trailer_number ?? ""}`}
                   stopId={stop.id}

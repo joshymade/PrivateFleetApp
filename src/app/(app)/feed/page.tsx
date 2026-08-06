@@ -112,7 +112,7 @@ export default async function FeedPage({ searchParams }: FeedPageProps) {
   const lookbackStart = shiftIsoWeek(currentWeek, -WEEK_LOOKBACK);
   const { startIso: lookbackStartIso } = isoWeekRangeUtc(lookbackStart);
 
-  let weekCountsQuery = supabase
+  const weekCountsQuery = supabase
     .from("damage_reports_with_notice_count")
     .select("captured_at")
     .gte("captured_at", lookbackStartIso)

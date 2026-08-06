@@ -9,14 +9,12 @@ import { FLEET_REGIONS } from "@/lib/fleet-region";
 type Props = {
   initialRegion: number | null;
   regionLocked: boolean;
-  defaultEmail: string;
   driverId: string | null;
 };
 
 export function ProfileRegionForm({
   initialRegion,
   regionLocked,
-  defaultEmail,
   driverId,
 }: Props) {
   const router = useRouter();
@@ -49,7 +47,7 @@ export function ProfileRegionForm({
 
   return (
     <form onSubmit={onSubmit} className="flex flex-col gap-3">
-      <label className="flex flex-col gap-1.5 text-sm">
+      <label className="flex flex-col gap-1.5 text-sm" htmlFor="region">
         <span className="text-muted-foreground">Region</span>
         <select
           id="region"
@@ -72,20 +70,7 @@ export function ProfileRegionForm({
       </label>
 
       {regionLocked ? (
-        <p className="text-xs text-muted-foreground" role="status">
-          Region is locked. Contact Admin to request a change.
-        </p>
-      ) : (
-        <p className="text-xs text-muted-foreground">
-          Choose once. After you save, only Admin can change it.
-        </p>
-      )}
-
-      {regionLocked ? (
-        <ContactAdminButton
-          defaultEmail={defaultEmail}
-          driverId={driverId}
-        />
+        <ContactAdminButton driverId={driverId} />
       ) : (
         <button
           type="submit"

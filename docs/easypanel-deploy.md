@@ -25,8 +25,6 @@ Set these on the service (build **and** runtime for public vars — Next inlines
 | `R2_SECRET_ACCESS_KEY` | Optional | Required for upload/export | |
 | `R2_BUCKET_NAME` | Optional | Required for upload/export | |
 | `R2_PUBLIC_URL` | Optional | Required for Feed image URLs | `*.r2.dev` or custom CDN — not the S3 API host |
-| `RESEND_API_KEY` | Optional | Required for Contact Admin email | |
-| `RESEND_FROM_EMAIL` | Optional | Recommended | Verified sender |
 
 Also add your production origin to Supabase Auth → URL Configuration (Site URL + redirect allow list).
 

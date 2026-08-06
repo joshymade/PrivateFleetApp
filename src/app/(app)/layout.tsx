@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { AppPageHeader } from "@/components/nav/app-page-header";
 import { BottomNav } from "@/components/nav/bottom-nav";
+import { SiteAlertBar } from "@/components/nav/site-alert-bar";
 import {
   driverNeedsProfileSetup,
   getSessionProfile,
@@ -11,6 +12,7 @@ import {
   DRIVER_FEED_BADGE_TYPES,
   SAFETY_FEED_NOTIFICATION_TYPES,
 } from "@/lib/notifications";
+import { getActiveSiteAlertForToday } from "@/lib/site-alerts";
 import { createClient } from "@/lib/supabase/server";
 import type { AppNotification } from "@/types/database";
 
@@ -68,6 +70,7 @@ export default async function AppShellLayout({
     { data: recentRows },
     { count: headerUnreadCount },
     { count: notificationTotal },
+    activeAlert,
   ] = await Promise.all([
     supabase
       .from("notifications")
@@ -86,6 +89,7 @@ export default async function AppShellLayout({
       .from("notifications")
       .select("id", { count: "exact", head: true })
       .eq("user_id", session.userId),
+    getActiveSiteAlertForToday(),
   ]);
 
   const recentNotifications = (recentRows ?? []) as AppNotification[];
@@ -95,6 +99,7 @@ export default async function AppShellLayout({
 
   return (
     <div className="flex min-h-full flex-1 flex-col">
+      {activeAlert ? <SiteAlertBar message={activeAlert.message} /> : null}
       <div className="mx-auto w-full max-w-lg flex-1 pb-20">
         <div className="px-4 pt-4 pb-4">
           <AppPageHeader

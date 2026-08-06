@@ -9,6 +9,11 @@ import {
   safetyInboxStatusClassName,
   safetyInboxStatusLabel,
 } from "@/lib/feed/safety-status";
+import {
+  feedReportAssetLabel,
+  isTypedTrailerNumber,
+} from "@/lib/feed/trailer-unit-type";
+import { truncateFeedDescription } from "@/lib/feed/truncate";
 import { formatFeedTimestamp } from "@/lib/format-time";
 import { displayFirstOrFull } from "@/lib/profile-name";
 import { usStateName } from "@/lib/us-states";
@@ -29,16 +34,18 @@ export type FeedListItem = {
   longitude: number | null;
   reporter_full_name: string | null;
   reporter_work_state: string | null;
-  /** Present when the viewer can read the referral (sender / safety / admin). */
+  /**
+   * From `safety_inbox_items.status` when the viewer can read the referral
+   * (sender / safety / admin); otherwise null → “safety not notified”.
+   */
   safety_inbox_status: SafetyInboxStatus | null;
 };
 
-function assetLabel(type: AssetType) {
-  return type === "tractor" ? "Tractor" : "Trailer";
-}
-
 export function FeedReportCard({ item }: { item: FeedListItem }) {
-  const snippet = item.report_comment?.trim();
+  const rawSnippet = item.report_comment?.trim();
+  const snippet = rawSnippet
+    ? truncateFeedDescription(rawSnippet)
+    : null;
   const reporterName = displayFirstOrFull(item.reporter_full_name, "");
   const workState = item.reporter_work_state?.trim() || null;
   const workStateLabel = workState ? usStateName(workState) : null;
@@ -46,10 +53,13 @@ export function FeedReportCard({ item }: { item: FeedListItem }) {
   const safetyLabelClass = safetyInboxStatusClassName(
     item.safety_inbox_status,
   );
+  const typeLabel = feedReportAssetLabel(item.asset_type, item.asset_number);
   const numberClass =
     item.asset_type === "tractor"
       ? "font-bold text-brand"
-      : "font-bold text-accent";
+      : isTypedTrailerNumber(item.asset_type, item.asset_number)
+        ? `font-bold ${pageTitleColorClassName}`
+        : "font-bold text-accent";
 
   return (
     <article className="border-b border-border py-4 last:border-b-0">
@@ -75,7 +85,7 @@ export function FeedReportCard({ item }: { item: FeedListItem }) {
         <div className="min-w-0 flex-1 space-y-1.5">
           <p className="text-sm font-semibold tracking-tight text-foreground">
             <Link href={`/feed/${item.id}`} className="hover:underline">
-              {assetLabel(item.asset_type)}
+              {typeLabel}
             </Link>{" "}
             <Link
               href={feedUnitHref(item.asset_number)}
@@ -137,24 +147,22 @@ export function FeedReportCard({ item }: { item: FeedListItem }) {
             ) : null}
           </p>
 
-          {safetyLabel ? (
-            <p className="text-xs font-medium">
-              {item.safety_inbox_status === "pending" ? (
-                <ClickableTooltip
-                  ariaLabel="Safety Notified: learn more"
-                  className={safetyLabelClass}
-                  content="This damage report was submitted to the Safety Team by the reporting driver."
-                >
-                  {safetyLabel}
-                </ClickableTooltip>
-              ) : (
-                <span className={safetyLabelClass}>{safetyLabel}</span>
-              )}
-            </p>
-          ) : null}
+          <p className="text-xs font-medium">
+            {item.safety_inbox_status === "pending" ? (
+              <ClickableTooltip
+                ariaLabel="Safety Notified: learn more"
+                className={safetyLabelClass}
+                content="This damage report was submitted to the Safety Team by the reporting driver."
+              >
+                {safetyLabel}
+              </ClickableTooltip>
+            ) : (
+              <span className={safetyLabelClass}>{safetyLabel}</span>
+            )}
+          </p>
 
           {snippet ? (
-            <p className="line-clamp-2 text-sm text-foreground">{snippet}</p>
+            <p className="text-sm text-foreground">{snippet}</p>
           ) : null}
         </div>
       </div>

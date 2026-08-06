@@ -6,7 +6,6 @@ export {
   markAllNotificationsRead,
   updateProfileName,
   updateProfileWorkState,
-  updateAdminContactEmail,
   contactAdminAboutIdentity,
   type ActionResult,
 } from "@/app/(app)/account/actions";

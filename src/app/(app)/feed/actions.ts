@@ -93,7 +93,7 @@ export async function noticeReport(reportId: string): Promise<ActionResult> {
 
 /** Notices are permanent — un-notice is rejected and never deletes the row. */
 export async function unnoticeReport(
-  _reportId: string,
+  _: string,
 ): Promise<ActionResult> {
   return { ok: false, error: "Notices cannot be removed." };
 }
@@ -145,8 +145,8 @@ export async function beepComment(
 
 /** Beeps are permanent — unbeep is rejected and never deletes the row. */
 export async function unbeepComment(
-  _reportId: string,
-  _commentId: string,
+  _: string,
+  __: string,
 ): Promise<ActionResult> {
   return { ok: false, error: "Beeps cannot be removed." };
 }

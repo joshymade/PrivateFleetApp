@@ -14,11 +14,16 @@ export default function AccountLegalPage() {
       <div>
         <h1 className={pageTitleClassName}>Legal</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Draft policies for PrivateFleet. Final reviewed copy can replace these
-          pages later.
+          FAQ and draft policies for PrivateFleet. Final reviewed copy can
+          replace these pages later.
         </p>
       </div>
       <div className="flex flex-col gap-2">
+        <AccountNavCard
+          href="/account/legal/faq"
+          title="FAQ"
+          description="What the app is, privacy, and Safety access"
+        />
         <AccountNavCard
           href="/account/legal/privacy"
           title="Privacy Policy"
