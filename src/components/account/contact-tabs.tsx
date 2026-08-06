@@ -5,20 +5,29 @@ import { ContactForm } from "@/components/account/contact-form";
 import { ContactInbox } from "@/components/account/contact-inbox";
 import type { ContactReply, ContactRequest } from "@/types/database";
 
-type InboxItem = ContactReply & {
+type InboxReply = ContactReply & {
   request: Pick<ContactRequest, "category" | "message" | "created_at"> | null;
 };
+
+type InboxRequest = Pick<
+  ContactRequest,
+  "id" | "category" | "message" | "source" | "created_at"
+>;
 
 type Tab = "compose" | "inbox";
 
 export function ContactTabs({
+  requests,
   replies,
   unreadCount,
+  initialTab = "compose",
 }: {
-  replies: InboxItem[];
+  requests: InboxRequest[];
+  replies: InboxReply[];
   unreadCount: number;
+  initialTab?: Tab;
 }) {
-  const [tab, setTab] = useState<Tab>("compose");
+  const [tab, setTab] = useState<Tab>(initialTab);
 
   return (
     <div className="space-y-4">
@@ -63,7 +72,7 @@ export function ContactTabs({
       {tab === "compose" ? (
         <ContactForm />
       ) : (
-        <ContactInbox replies={replies} />
+        <ContactInbox requests={requests} replies={replies} />
       )}
     </div>
   );

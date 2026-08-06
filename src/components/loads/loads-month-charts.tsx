@@ -5,7 +5,6 @@ import {
   BarChart,
   CartesianGrid,
   Cell,
-  Legend,
   Pie,
   PieChart,
   ResponsiveContainer,
@@ -16,9 +15,15 @@ import {
 import { useHideMoney } from "@/lib/hide-money";
 import type { MonthChartDay } from "@/lib/loads/queries";
 import { displayMoney, MONEY_MASK } from "@/lib/money";
+import {
+  buildUnpaidMilesPieSlices,
+  formatMilesNumber,
+  formatSignedMiles,
+  unpaidMilesDisplay,
+  unpaidMilesToneClass,
+} from "@/lib/loads/unpaid-miles";
 
 const BRAND = "var(--color-brand)";
-const ACCENT = "var(--color-accent)";
 const CHART_MARGIN = { top: 4, right: 4, left: 0, bottom: 0 };
 
 function dayTickInterval(dayCount: number): number {
@@ -27,29 +32,22 @@ function dayTickInterval(dayCount: number): number {
   return 2;
 }
 
-function formatMiles(n: number): string {
-  return Number.isInteger(n) ? String(n) : n.toFixed(1);
-}
-
-/** Month totals pie — clearest aggregate Driven vs Paid comparison. */
-function MilesTotalsPie({ days }: { days: MonthChartDay[] }) {
+/** Single month miles pie: matched miles + unpaid difference (red/green). */
+function UnpaidMilesPie({ days }: { days: MonthChartDay[] }) {
   const drivenTotal = days.reduce((sum, d) => sum + d.driven, 0);
   const paidTotal = days.reduce((sum, d) => sum + d.paid, 0);
-  const data = [
-    { name: "Driven miles", value: drivenTotal, color: BRAND },
-    { name: "Paid miles", value: paidTotal, color: ACCENT },
-  ];
-  const hasSlice = drivenTotal > 0 || paidTotal > 0;
+  const data = buildUnpaidMilesPieSlices(drivenTotal, paidTotal);
+  const unpaidDisplay = unpaidMilesDisplay(drivenTotal, paidTotal);
 
-  if (!hasSlice) return null;
+  if (data.length === 0) return null;
 
   return (
     <div className="rounded-2xl border border-border bg-background p-4">
       <h3 className="text-sm font-semibold text-foreground">
-        Driven versus Paid miles
+        Unpaid Miles Driven
       </h3>
       <p className="mt-0.5 text-xs text-muted-foreground">
-        Month totals — odometer driven vs company paid
+        Driven − paid as a signed gap: red shortfall, green extra paid
       </p>
       <div className="mt-2 flex items-center gap-2">
         <div className="h-40 w-[55%] shrink-0">
@@ -72,7 +70,7 @@ function MilesTotalsPie({ days }: { days: MonthChartDay[] }) {
               </Pie>
               <Tooltip
                 formatter={(value: number, name: string) => [
-                  formatMiles(Number(value)),
+                  formatMilesNumber(Number(value)),
                   name,
                 ]}
               />
@@ -89,88 +87,25 @@ function MilesTotalsPie({ days }: { days: MonthChartDay[] }) {
               />
               <div className="min-w-0">
                 <p className="text-xs text-muted-foreground">{entry.name}</p>
-                <p className="font-semibold tabular-nums text-foreground">
-                  {formatMiles(entry.value)}
+                <p
+                  className={`font-semibold tabular-nums ${
+                    entry.isUnpaid
+                      ? unpaidMilesToneClass(unpaidDisplay)
+                      : "text-foreground"
+                  }`}
+                >
+                  {entry.isUnpaid
+                    ? formatSignedMiles(unpaidDisplay)
+                    : formatMilesNumber(entry.value)}
                 </p>
               </div>
             </li>
           ))}
+          <li className="border-t border-border pt-2 text-xs text-muted-foreground">
+            Driven {formatMilesNumber(drivenTotal)} · Paid{" "}
+            {formatMilesNumber(paidTotal)}
+          </li>
         </ul>
-      </div>
-    </div>
-  );
-}
-
-/** Daily grouped bars — readable day-by-day Driven vs Paid without a busy composed chart. */
-function MilesDailyBars({ days }: { days: MonthChartDay[] }) {
-  const activeDays = days.filter((d) => d.driven > 0 || d.paid > 0);
-  if (activeDays.length === 0) return null;
-
-  return (
-    <div className="rounded-2xl border border-border bg-background p-4">
-      <h3 className="text-sm font-semibold text-foreground">
-        Daily Driven versus Paid miles
-      </h3>
-      <p className="mt-0.5 text-xs text-muted-foreground">
-        Side-by-side miles for each day with activity
-      </p>
-      <div className="mt-3 h-48 w-full">
-        <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={activeDays} margin={CHART_MARGIN} barGap={2} barCategoryGap="18%">
-            <CartesianGrid
-              strokeDasharray="3 3"
-              vertical={false}
-              className="stroke-border"
-            />
-            <XAxis
-              dataKey="label"
-              tick={{ fontSize: 10 }}
-              interval={dayTickInterval(activeDays.length)}
-              axisLine={false}
-              tickLine={false}
-            />
-            <YAxis
-              tick={{ fontSize: 11 }}
-              width={32}
-              allowDecimals={false}
-              axisLine={false}
-              tickLine={false}
-            />
-            <Tooltip
-              formatter={(value: number, name: string) => {
-                if (name === "driven") return [formatMiles(value), "Driven miles"];
-                if (name === "paid") return [formatMiles(value), "Paid miles"];
-                return [value, name];
-              }}
-              labelFormatter={(_, payload) => {
-                const date = payload?.[0]?.payload?.date as string | undefined;
-                return date ?? "";
-              }}
-            />
-            <Legend
-              wrapperStyle={{ fontSize: 12 }}
-              formatter={(value) =>
-                value === "driven"
-                  ? "Driven miles"
-                  : value === "paid"
-                    ? "Paid miles"
-                    : value
-              }
-            />
-            <Bar
-              dataKey="driven"
-              fill={BRAND}
-              radius={[3, 3, 0, 0]}
-              maxBarSize={14}
-            />
-            <Bar
-              dataKey="paid"
-              fill={ACCENT}
-              radius={[3, 3, 0, 0]}
-              maxBarSize={14}
-            />
-          </BarChart>
-        </ResponsiveContainer>
       </div>
     </div>
   );
@@ -249,8 +184,7 @@ export function LoadsMonthCharts({ days }: { days: MonthChartDay[] }) {
 
   return (
     <div className="space-y-5">
-      <MilesTotalsPie days={days} />
-      <MilesDailyBars days={days} />
+      <UnpaidMilesPie days={days} />
       <EarningsChart days={days} />
     </div>
   );

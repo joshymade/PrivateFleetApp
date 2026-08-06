@@ -7,20 +7,27 @@ import type { ContactReply, ContactRequest } from "@/types/database";
 
 export const metadata = { title: "Contact" };
 
-export default async function AccountContactPage() {
+type PageProps = {
+  searchParams: Promise<{ tab?: string }>;
+};
+
+export default async function AccountContactPage({ searchParams }: PageProps) {
   const session = await getSessionProfile();
   if (!session) return null;
+
+  const params = await searchParams;
+  const initialTab = params.tab === "inbox" ? "inbox" : "compose";
 
   const supabase = await createClient();
   const { data: requestRows } = await supabase
     .from("contact_requests")
-    .select("id, category, message, created_at")
+    .select("id, category, message, source, created_at")
     .eq("driver_id", session.userId)
     .order("created_at", { ascending: false });
 
   const requests = (requestRows ?? []) as Pick<
     ContactRequest,
-    "id" | "category" | "message" | "created_at"
+    "id" | "category" | "message" | "source" | "created_at"
   >[];
   const requestById = new Map(requests.map((r) => [r.id, r]));
 
@@ -55,12 +62,15 @@ export default async function AccountContactPage() {
         <h1 className={pageTitleClassName}>Contact</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           Message Admin about driver info changes, app issues, or feature
-          suggestions. Replies appear in Inbox — no email required.
+          suggestions. Your sent messages and Admin replies appear in Inbox —
+          no email required.
         </p>
       </div>
       <ContactTabs
+        requests={requests}
         replies={replies}
         unreadCount={unreadCount}
+        initialTab={initialTab}
       />
     </main>
   );

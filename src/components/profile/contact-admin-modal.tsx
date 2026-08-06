@@ -1,13 +1,28 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useId, useRef, useState, useTransition } from "react";
 import { contactAdminAboutIdentity } from "@/app/(app)/account/actions";
 import { DriverId } from "@/components/ui/driver-id";
+
+const INBOX_HREF = "/account/contact?tab=inbox";
 
 type Props = {
   onClose: () => void;
   driverId: string | null;
 };
+
+function InboxLink({ onNavigate }: { onNavigate?: () => void }) {
+  return (
+    <Link
+      href={INBOX_HREF}
+      className="font-medium text-brand underline underline-offset-2"
+      onClick={onNavigate}
+    >
+      Contact › Inbox
+    </Link>
+  );
+}
 
 export function ContactAdminModal({ onClose, driverId }: Props) {
   const titleId = useId();
@@ -69,13 +84,14 @@ export function ContactAdminModal({ onClose, driverId }: Props) {
         </h2>
         <p className="mt-1 text-sm text-muted-foreground">
           Request a name or work-state change. Your Driver ID is included
-          automatically. Admin replies in Contact › Inbox.
+          automatically. Admin replies in <InboxLink onNavigate={onClose} />.
         </p>
 
         {sent ? (
           <div className="mt-4 flex flex-col gap-3">
             <p className="text-sm text-brand" role="status">
-              Request sent. Check Contact › Inbox for Admin replies.
+              Request sent. Check <InboxLink onNavigate={onClose} /> for Admin
+              replies.
             </p>
             <button
               type="button"

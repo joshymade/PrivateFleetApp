@@ -246,6 +246,7 @@ export default async function HomePage() {
           periodLoads: periodStats.loadCount,
           periodEarnings: periodStats.earnings,
           periodDrivenMiles: periodStats.drivenMiles,
+          periodPaidMiles: periodStats.paidMiles,
           periodWorkedMinutes,
         }}
         latestAdp={latestAdp}

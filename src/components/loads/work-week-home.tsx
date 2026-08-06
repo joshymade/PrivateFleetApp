@@ -22,6 +22,11 @@ import {
   stopTypeNameClass,
 } from "@/lib/loads/format";
 import { formatDurationHm, shiftDurationMinutes } from "@/lib/loads/shift-time";
+import {
+  formatSignedMilesLabel,
+  unpaidMilesDisplay,
+  unpaidMilesToneClass,
+} from "@/lib/loads/unpaid-miles";
 import type { AdpEntry, DailyPayEntry, Load, ShiftPunch } from "@/types/database";
 import type { LoadWithStops } from "@/lib/loads/queries";
 
@@ -38,6 +43,8 @@ export type WorkWeekDaySummary = {
   totalEarnings: number | null;
   /** null → show "—" until odometer pair makes driven computable. */
   totalDrivenMiles: number | null;
+  /** Sum of paid_miles; 0 when none recorded on counted loads. */
+  totalPaidMiles: number;
   /** Day card includes an in-progress active load (live preview). */
   includesActivePreview: boolean;
   /** Flat daily pay when the day has no loads (past empty days). */
@@ -53,6 +60,7 @@ export type WorkStatsSummary = {
   periodLoads: number;
   periodEarnings: number;
   periodDrivenMiles: number;
+  periodPaidMiles: number;
   periodWorkedMinutes: number;
 };
 
@@ -80,6 +88,7 @@ export function summarizeWorkWeekDays(
     | "load_date"
     | "status"
     | "pay_amount"
+    | "paid_miles"
     | "starting_mileage"
     | "ending_mileage"
   > | null = null,
@@ -127,6 +136,7 @@ export function summarizeWorkWeekDays(
     let hasPay = false;
     let drivenSum = 0;
     let hasDriven = false;
+    let paidSum = 0;
 
     for (const load of completed) {
       if (load.pay_amount != null) {
@@ -137,6 +147,9 @@ export function summarizeWorkWeekDays(
       if (driven != null) {
         drivenSum += driven;
         hasDriven = true;
+      }
+      if (load.paid_miles != null) {
+        paidSum += Number(load.paid_miles);
       }
     }
 
@@ -152,6 +165,9 @@ export function summarizeWorkWeekDays(
       if (driven != null) {
         drivenSum += driven;
         hasDriven = true;
+      }
+      if (previewActive.paid_miles != null) {
+        paidSum += Number(previewActive.paid_miles);
       }
     }
 
@@ -185,6 +201,7 @@ export function summarizeWorkWeekDays(
             : includesActivePreview
               ? null
               : 0,
+      totalPaidMiles: loadCount === 0 ? 0 : paidSum,
       includesActivePreview,
       dailyPayAmount,
       punchStart,
@@ -206,10 +223,12 @@ export function summarizeWorkWeekStats(
   loadCount: number;
   earnings: number;
   drivenMiles: number;
+  paidMiles: number;
 } {
   let loadCount = 0;
   let earnings = 0;
   let driven = 0;
+  let paid = 0;
   const datesWithLoads = new Set<string>();
   for (const load of loads) {
     datesWithLoads.add(load.load_date);
@@ -220,6 +239,9 @@ export function summarizeWorkWeekStats(
       }
       const d = drivenMiles(load.starting_mileage, load.ending_mileage);
       if (d != null) driven += d;
+      if (load.paid_miles != null) {
+        paid += Number(load.paid_miles);
+      }
     }
   }
   for (const entry of dailyPayEntries) {
@@ -227,7 +249,7 @@ export function summarizeWorkWeekStats(
       earnings += Number(entry.amount);
     }
   }
-  return { loadCount, earnings, drivenMiles: driven };
+  return { loadCount, earnings, drivenMiles: driven, paidMiles: paid };
 }
 
 export function WorkWeekHome({
@@ -319,6 +341,10 @@ export function WorkWeekHome({
     }));
 
   const statsScope = periodMode ? "This pay period" : "This work week";
+  const periodUnpaidDisplay = unpaidMilesDisplay(
+    stats.periodDrivenMiles,
+    stats.periodPaidMiles,
+  );
 
   return (
     <DailyEarningsRemindersProvider
@@ -623,6 +649,22 @@ export function WorkWeekHome({
               />
             </li>
           </ul>
+          <div className="flex items-baseline justify-between gap-3 border-t border-border px-4 py-2.5">
+            <div className="min-w-0">
+              <p className="text-xs text-muted-foreground">
+                Unpaid Miles Driven
+              </p>
+              <p className="mt-0.5 text-[11px] text-muted-foreground">
+                Paid {milesLabel(stats.periodPaidMiles)} · Driven{" "}
+                {milesLabel(stats.periodDrivenMiles)}
+              </p>
+            </div>
+            <p
+              className={`shrink-0 text-sm font-semibold tabular-nums ${unpaidMilesToneClass(periodUnpaidDisplay)}`}
+            >
+              {formatSignedMilesLabel(periodUnpaidDisplay)}
+            </p>
+          </div>
           {earningsPerHour != null ? (
             <div className="flex items-baseline justify-between gap-3 border-t border-border px-4 py-2.5">
               <p className="text-xs text-muted-foreground">
@@ -786,6 +828,30 @@ function WorkWeekDayCard({
               {day.totalDrivenMiles == null
                 ? "—"
                 : milesLabel(day.totalDrivenMiles)}
+            </dd>
+          </div>
+          <div className="flex items-baseline justify-between gap-1">
+            <dt className={metaLabelClass}>Unpaid</dt>
+            <dd
+              className={`truncate font-semibold tabular-nums ${
+                day.totalDrivenMiles == null
+                  ? valueClass
+                  : unpaidMilesToneClass(
+                      unpaidMilesDisplay(
+                        day.totalDrivenMiles,
+                        day.totalPaidMiles,
+                      ),
+                    )
+              }`}
+            >
+              {day.totalDrivenMiles == null
+                ? "—"
+                : formatSignedMilesLabel(
+                    unpaidMilesDisplay(
+                      day.totalDrivenMiles,
+                      day.totalPaidMiles,
+                    ),
+                  )}
             </dd>
           </div>
         </dl>

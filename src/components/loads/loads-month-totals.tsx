@@ -1,12 +1,19 @@
 import { MaskedMoney } from "@/components/ui/masked-money";
 import { formatDurationHm } from "@/lib/loads/shift-time";
 import type { MonthLoadTotals } from "@/lib/loads/queries";
-
-function formatMiles(n: number): string {
-  return Number.isInteger(n) ? String(n) : n.toFixed(1);
-}
+import {
+  formatMilesNumber,
+  formatSignedMiles,
+  unpaidMilesDisplay,
+  unpaidMilesToneClass,
+} from "@/lib/loads/unpaid-miles";
 
 export function LoadsMonthTotals({ totals }: { totals: MonthLoadTotals }) {
+  const unpaidDisplay = unpaidMilesDisplay(
+    totals.drivenMiles,
+    totals.paidMiles,
+  );
+
   return (
     <section className="rounded-2xl border border-border bg-background p-4">
       <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
@@ -30,7 +37,16 @@ export function LoadsMonthTotals({ totals }: { totals: MonthLoadTotals }) {
         <div>
           <dt className="text-muted-foreground">Driven versus Paid miles</dt>
           <dd className="mt-0.5 text-lg font-semibold tabular-nums text-foreground">
-            {formatMiles(totals.drivenMiles)} / {formatMiles(totals.paidMiles)}
+            {formatMilesNumber(totals.drivenMiles)} /{" "}
+            {formatMilesNumber(totals.paidMiles)}
+          </dd>
+        </div>
+        <div>
+          <dt className="text-muted-foreground">Unpaid Miles Driven</dt>
+          <dd
+            className={`mt-0.5 text-lg font-semibold tabular-nums ${unpaidMilesToneClass(unpaidDisplay)}`}
+          >
+            {formatSignedMiles(unpaidDisplay)}
           </dd>
         </div>
         <div>

@@ -18,7 +18,7 @@ export function hrefForNotification(n: AppNotification): string | null {
     return "/admin/deletion-requests";
   }
   if (n.type === "contact_reply") {
-    return "/account/contact";
+    return "/account/contact?tab=inbox";
   }
   if (n.type === "contact_message" && n.actor_id) {
     return `/admin/users/${n.actor_id}`;
