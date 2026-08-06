@@ -236,8 +236,8 @@ export type DamageReport = {
   /** Driver description of damage at upload (not a Feed reply). */
   report_comment: string | null;
   /**
-   * Trailer damage area tags (stable keys from DAMAGE_LOCATION_OPTIONS).
-   * Empty for tractor reports or when none selected.
+   * Damage area tags (stable keys from TRACTOR_/TRAILER_DAMAGE_LOCATION_OPTIONS).
+   * Aggregated from per-photo locations on create.
    */
   damage_locations: string[];
   /**
@@ -256,8 +256,8 @@ export type DamageReportPhoto = {
   r2_url: string | null;
   sort_order: number;
   /**
-   * Stable damage location key for this photo (DAMAGE_LOCATION_OPTIONS).
-   * Required for new trailer photos; null on legacy rows.
+   * Stable damage location key for this photo (tractor or trailer options).
+   * Required for new photos; null on legacy rows.
    */
   damage_location: string | null;
   created_at: string;

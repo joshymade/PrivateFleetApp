@@ -57,61 +57,46 @@ export type UnpaidMilesPieSlice = {
 };
 
 /**
- * Two-slice pie: matched miles + |unpaid| difference.
- * When driven > paid: Paid + Unpaid (red). When paid > driven: Driven + Unpaid (green).
+ * Three-slice pie: Paid Miles, Miles Driven, and |unpaid| difference.
+ * Of Paid vs Driven, larger first; Unpaid Miles always last.
+ * Unpaid fill is red when driven > paid, green when paid > driven.
  */
 export function buildUnpaidMilesPieSlices(
   drivenMiles: number,
   paidMiles: number,
 ): UnpaidMilesPieSlice[] {
-  const display = unpaidMilesDisplay(drivenMiles, paidMiles);
-  const matched = Math.min(drivenMiles, paidMiles);
-  const delta = Math.abs(display);
-
   if (drivenMiles <= 0 && paidMiles <= 0) return [];
 
-  if (delta < 1e-9) {
-    return [
-      {
-        name: "Paid = Driven",
-        value: matched > 0 ? matched : drivenMiles || paidMiles,
-        color: "var(--color-brand)",
-        isUnpaid: false,
-      },
-    ];
-  }
+  const display = unpaidMilesDisplay(drivenMiles, paidMiles);
+  const delta = Math.abs(display);
 
-  if (display < 0) {
-    // More driven than paid — unpaid shortfall (red)
-    return [
-      {
-        name: "Paid miles",
-        value: matched,
-        color: "var(--color-accent)",
-        isUnpaid: false,
-      },
-      {
-        name: "Unpaid miles",
-        value: delta,
-        color: unpaidMilesChartColor(display),
-        isUnpaid: true,
-      },
-    ].filter((s) => s.value > 0);
-  }
+  const paidSlice: UnpaidMilesPieSlice = {
+    name: "Paid Miles",
+    value: paidMiles,
+    color: "var(--color-accent)",
+    isUnpaid: false,
+  };
+  const drivenSlice: UnpaidMilesPieSlice = {
+    name: "Miles Driven",
+    value: drivenMiles,
+    color: "var(--color-brand)",
+    isUnpaid: false,
+  };
 
-  // More paid than driven — surplus shown as green unpaid slice
-  return [
-    {
-      name: "Driven miles",
-      value: matched,
-      color: "var(--color-brand)",
-      isUnpaid: false,
-    },
-    {
-      name: "Unpaid miles",
+  const primary =
+    paidMiles >= drivenMiles
+      ? [paidSlice, drivenSlice]
+      : [drivenSlice, paidSlice];
+
+  const slices = [...primary];
+  if (delta >= 1e-9) {
+    slices.push({
+      name: "Unpaid Miles",
       value: delta,
       color: unpaidMilesChartColor(display),
       isUnpaid: true,
-    },
-  ].filter((s) => s.value > 0);
+    });
+  }
+
+  return slices.filter((s) => s.value > 0);
 }

@@ -17,7 +17,7 @@ import {
   PROFILE_INCOMPLETE_MESSAGE,
 } from "@/lib/auth/profile-complete";
 import {
-  DAMAGE_LOCATION_OPTIONS,
+  damageLocationOptionsForAsset,
   sanitizeDamageLocations,
   type DamageLocationValue,
 } from "@/lib/damage/locations";
@@ -62,9 +62,6 @@ export function DamageCaptureForm({
   const [assetType, setAssetType] = useState<AssetType>(initialAssetType);
   const [assetNumber, setAssetNumber] = useState("");
   const [reportComment, setReportComment] = useState("");
-  const [damageLocations, setDamageLocations] = useState<
-    DamageLocationValue[]
-  >([]);
   const [activeUnitKind, setActiveUnitKind] = useState<ActiveUnitKind>("");
   const [selectedLoadId, setSelectedLoadId] = useState("");
   const [photos, setPhotos] = useState<File[]>([]);
@@ -73,7 +70,6 @@ export function DamageCaptureForm({
   const [phase, setPhase] = useState<SubmitState>("idle");
 
   const isTractor = assetType === "tractor";
-  const isTrailer = assetType === "trailer";
   const busy = phase !== "idle";
   const assetNumberLabel =
     assetType === "tractor" ? "Tractor Number" : "Trailer Number";
@@ -101,7 +97,6 @@ export function DamageCaptureForm({
       setAssetNumber(formatTractorNumber(currentTruck));
       setSelectedLoadId(activeUnit.loadId);
       if (typeChanged) {
-        setDamageLocations([]);
         setPhotoLocations([]);
         setPhotos([]);
       }
@@ -116,7 +111,6 @@ export function DamageCaptureForm({
       if (typeChanged) {
         setPhotos([]);
         setPhotoLocations([]);
-        setDamageLocations([]);
       }
       setError(null);
     }
@@ -128,7 +122,6 @@ export function DamageCaptureForm({
     setAssetNumber("");
     setPhotos([]);
     setPhotoLocations([]);
-    setDamageLocations([]);
     setActiveUnitKind("");
     setSelectedLoadId("");
     setError(null);
@@ -149,14 +142,6 @@ export function DamageCaptureForm({
       const aligned = next.map((_, i) => prev[i] ?? null);
       return aligned;
     });
-  }
-
-  function toggleReportLocation(value: DamageLocationValue) {
-    setDamageLocations((prev) =>
-      prev.includes(value)
-        ? prev.filter((v) => v !== value)
-        : [...prev, value],
-    );
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -190,23 +175,16 @@ export function DamageCaptureForm({
       return;
     }
 
-    if (isTrailer) {
-      const missing = files.some((_, i) => !photoLocations[i]?.trim());
-      if (missing) {
-        setError("Select a damage location for each photo.");
-        return;
-      }
+    const missing = files.some((_, i) => !photoLocations[i]?.trim());
+    if (missing) {
+      setError("Select a damage location for each photo.");
+      return;
     }
 
-    const photoLocs = isTrailer
-      ? files.map((_, i) => photoLocations[i] as DamageLocationValue)
-      : [];
-    const reportLocs = isTrailer
-      ? sanitizeDamageLocations([
-          ...damageLocations,
-          ...photoLocs,
-        ])
-      : [];
+    const photoLocs = files.map(
+      (_, i) => photoLocations[i] as DamageLocationValue,
+    );
+    const reportLocs = sanitizeDamageLocations(photoLocs);
 
     setPhase("locating");
 
@@ -317,7 +295,7 @@ export function DamageCaptureForm({
         r2_key: u.r2Key,
         r2_url: u.r2Url,
         sort_order: index,
-        damage_location: isTrailer ? photoLocs[index] ?? null : null,
+        damage_location: photoLocs[index] ?? null,
       }));
 
       const { error: photosError } = await supabase
@@ -497,72 +475,16 @@ export function DamageCaptureForm({
         />
       </div>
 
-      <fieldset className="space-y-3" aria-disabled={!isTrailer || busy}>
-        <legend className="text-sm font-medium text-foreground">
-          Damage location{" "}
-          <span className="font-normal text-muted-foreground">
-            {isTrailer ? "(optional)" : "(trailer only)"}
-          </span>
-        </legend>
-        {isTrailer ? (
-          <p className="text-xs text-muted-foreground">
-            Tag areas for the report. Each photo below still needs its own
-            location.
-          </p>
-        ) : (
-          <p className="text-xs text-muted-foreground">
-            Select{" "}
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => handleAssetTypeChange("trailer")}
-              className="font-medium text-foreground underline underline-offset-2 disabled:opacity-50"
-            >
-              Trailer
-            </button>{" "}
-            above to tag damage areas and set a location on each photo.
-          </p>
-        )}
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-          {DAMAGE_LOCATION_OPTIONS.map((opt) => {
-            const checked = isTrailer && damageLocations.includes(opt.value);
-            const locationDisabled = busy || !isTrailer;
-            return (
-              <label
-                key={opt.value}
-                className={[
-                  "flex min-h-11 items-center gap-3 rounded-lg border px-3 py-2.5 text-sm transition",
-                  locationDisabled
-                    ? "cursor-not-allowed border-border/70 bg-muted/40 text-muted-foreground"
-                    : checked
-                      ? "cursor-pointer border-brand bg-brand/10 text-foreground"
-                      : "cursor-pointer border-border bg-card text-foreground hover:border-brand/40",
-                ].join(" ")}
-              >
-                <input
-                  type="checkbox"
-                  checked={checked}
-                  disabled={locationDisabled}
-                  onChange={() => toggleReportLocation(opt.value)}
-                  className="size-4 shrink-0 accent-brand disabled:opacity-60"
-                />
-                <span>{opt.label}</span>
-              </label>
-            );
-          })}
-        </div>
-      </fieldset>
-
       <PhotoCapture
         multiple
         values={photos}
         onChangeMultiple={handlePhotosChange}
         disabled={busy}
         maxFiles={MAX_PHOTOS}
-        locationOptions={isTrailer ? [...DAMAGE_LOCATION_OPTIONS] : undefined}
-        locations={isTrailer ? photoLocations : undefined}
-        onLocationsChange={isTrailer ? setPhotoLocations : undefined}
-        requireLocation={isTrailer}
+        locationOptions={[...damageLocationOptionsForAsset(assetType)]}
+        locations={photoLocations}
+        onLocationsChange={setPhotoLocations}
+        requireLocation
       />
 
       {error ? (

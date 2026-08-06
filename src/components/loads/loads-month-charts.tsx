@@ -32,8 +32,8 @@ function dayTickInterval(dayCount: number): number {
   return 2;
 }
 
-/** Single month miles pie: matched miles + unpaid difference (red/green). */
-function UnpaidMilesPie({ days }: { days: MonthChartDay[] }) {
+/** Month miles pie: Paid + Driven + unpaid gap (red/green), unpaid last. */
+function MilesDrivenPie({ days }: { days: MonthChartDay[] }) {
   const drivenTotal = days.reduce((sum, d) => sum + d.driven, 0);
   const paidTotal = days.reduce((sum, d) => sum + d.paid, 0);
   const data = buildUnpaidMilesPieSlices(drivenTotal, paidTotal);
@@ -43,11 +43,9 @@ function UnpaidMilesPie({ days }: { days: MonthChartDay[] }) {
 
   return (
     <div className="rounded-2xl border border-border bg-background p-4">
-      <h3 className="text-sm font-semibold text-foreground">
-        Unpaid Miles Driven
-      </h3>
+      <h3 className="text-sm font-semibold text-foreground">Miles Driven</h3>
       <p className="mt-0.5 text-xs text-muted-foreground">
-        Driven − paid as a signed gap: red shortfall, green extra paid
+        Paid vs driven; unpaid gap is red shortfall or green extra paid
       </p>
       <div className="mt-2 flex items-center gap-2">
         <div className="h-40 w-[55%] shrink-0">
@@ -184,7 +182,7 @@ export function LoadsMonthCharts({ days }: { days: MonthChartDay[] }) {
 
   return (
     <div className="space-y-5">
-      <UnpaidMilesPie days={days} />
+      <MilesDrivenPie days={days} />
       <EarningsChart days={days} />
     </div>
   );

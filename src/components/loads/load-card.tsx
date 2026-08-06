@@ -9,9 +9,22 @@ import {
   statusLabel,
 } from "@/lib/loads/format";
 import type { LoadWithStops } from "@/lib/loads/queries";
+import {
+  formatSignedMiles,
+  unpaidMilesDisplay,
+  unpaidMilesToneClass,
+} from "@/lib/loads/unpaid-miles";
 
 export function LoadCard({ load }: { load: LoadWithStops }) {
   const driven = drivenMiles(load.starting_mileage, load.ending_mileage);
+  // No odometer pair → driven unknown → unpaid treated as 0
+  const unpaidDisplay =
+    driven == null
+      ? 0
+      : unpaidMilesDisplay(
+          driven,
+          load.paid_miles != null ? Number(load.paid_miles) : 0,
+        );
   const truck = load.truck_number?.trim() || null;
 
   return (
@@ -55,6 +68,14 @@ export function LoadCard({ load }: { load: LoadWithStops }) {
           <dt className="text-muted-foreground">Driven miles</dt>
           <dd className="font-medium text-foreground">
             {driven != null ? driven : "—"}
+          </dd>
+        </div>
+        <div>
+          <dt className="text-muted-foreground">Unpaid Miles</dt>
+          <dd
+            className={`font-medium tabular-nums ${unpaidMilesToneClass(unpaidDisplay)}`}
+          >
+            {formatSignedMiles(unpaidDisplay)}
           </dd>
         </div>
         {load.pay_amount != null ? (
