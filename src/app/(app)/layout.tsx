@@ -12,7 +12,7 @@ import {
   DRIVER_FEED_BADGE_TYPES,
   SAFETY_FEED_NOTIFICATION_TYPES,
 } from "@/lib/notifications";
-import { getActiveSiteAlertForToday } from "@/lib/site-alerts";
+import { getActiveSiteAlertForToday } from "@/lib/site-alerts.server";
 import { createClient } from "@/lib/supabase/server";
 import type { AppNotification } from "@/types/database";
 

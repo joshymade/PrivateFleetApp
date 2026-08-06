@@ -24,7 +24,7 @@ import {
   getSessionProfile,
   isProfileComplete,
 } from "@/lib/auth/profile";
-import { listSiteAlertsForAdmin } from "@/lib/site-alerts";
+import { listSiteAlertsForAdmin } from "@/lib/site-alerts.server";
 import { SPLASH_TEXT_KEY } from "@/lib/splash";
 import { createClient } from "@/lib/supabase/server";
 import type { AdpEntry, SiteAlert } from "@/types/database";
