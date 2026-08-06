@@ -21,6 +21,8 @@ export type CanvasExportMeta = {
   longitude?: number | null;
   routeNumber?: string | null;
   reportComment?: string | null;
+  /** Human-readable damage location for this photo (export strip). */
+  damageLocationLabel?: string | null;
   /** @deprecated use assetNumber */
   trailerNumber?: string;
 };
@@ -110,6 +112,9 @@ export async function compositeDamageJpg(
     `Captured: ${formatWhen(meta.capturedAt)}`,
   );
   if (meta.routeNumber) lines.push(`Route: ${meta.routeNumber}`);
+  if (meta.damageLocationLabel?.trim()) {
+    lines.push(`Location: ${meta.damageLocationLabel.trim()}`);
+  }
   if (gps) lines.push(`GPS: ${gps}`);
 
   // Measure comment wrap after we have a canvas context

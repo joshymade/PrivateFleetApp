@@ -79,7 +79,7 @@ export function ReportPrivacyActions({
           disabled={pending}
           className="min-h-11 rounded-lg border border-border px-4 text-sm font-medium text-foreground disabled:opacity-60"
         >
-          {pending ? "Working…" : "Untag my name"}
+          {pending ? "Working…" : "Make Anonymous"}
         </button>
       ) : null}
 

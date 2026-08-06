@@ -49,6 +49,7 @@ type ReportRow = Pick<
   | "driver_id"
   | "reported_by"
   | "report_comment"
+  | "damage_locations"
   | "captured_at"
   | "latitude"
   | "longitude"
@@ -139,7 +140,7 @@ export default async function FeedPage({ searchParams }: FeedPageProps) {
   let reportsQuery = supabase
     .from("damage_reports_with_notice_count")
     .select(
-      "id, asset_type, asset_number, driver_id, reported_by, report_comment, captured_at, latitude, longitude, r2_key, r2_url, notice_count, view_count",
+      "id, asset_type, asset_number, driver_id, reported_by, report_comment, damage_locations, captured_at, latitude, longitude, r2_key, r2_url, notice_count, view_count",
     )
     .order("captured_at", { ascending: false })
     .range(from, to);
@@ -296,6 +297,7 @@ export default async function FeedPage({ searchParams }: FeedPageProps) {
                   asset_type: row.asset_type as AssetType,
                   asset_number: row.asset_number,
                   report_comment: row.report_comment,
+                  damage_locations: row.damage_locations,
                   captured_at: row.captured_at,
                   r2_url: row.r2_url,
                   photo_url: damagePhotoUrl(row.r2_url, row.r2_key),

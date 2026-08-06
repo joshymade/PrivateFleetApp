@@ -12,6 +12,7 @@ import type { LoadWithStops } from "@/lib/loads/queries";
 
 export function LoadCard({ load }: { load: LoadWithStops }) {
   const driven = drivenMiles(load.starting_mileage, load.ending_mileage);
+  const truck = load.truck_number?.trim() || null;
 
   return (
     <Link
@@ -35,6 +36,10 @@ export function LoadCard({ load }: { load: LoadWithStops }) {
       </div>
       <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 text-sm">
         <div>
+          <dt className="text-muted-foreground">Truck</dt>
+          <dd className="font-medium text-foreground">{truck ?? "—"}</dd>
+        </div>
+        <div>
           <dt className="text-muted-foreground">Trailer(s)</dt>
           <dd className="font-medium text-foreground">
             {formatTrailerSequence(load, load.load_stops)}
@@ -46,12 +51,12 @@ export function LoadCard({ load }: { load: LoadWithStops }) {
             {load.paid_miles != null ? load.paid_miles : "—"}
           </dd>
         </div>
-        {driven != null ? (
-          <div>
-            <dt className="text-muted-foreground">Driven</dt>
-            <dd className="font-medium text-foreground">{driven}</dd>
-          </div>
-        ) : null}
+        <div>
+          <dt className="text-muted-foreground">Driven miles</dt>
+          <dd className="font-medium text-foreground">
+            {driven != null ? driven : "—"}
+          </dd>
+        </div>
         {load.pay_amount != null ? (
           <div>
             <dt className="text-muted-foreground">Pay</dt>

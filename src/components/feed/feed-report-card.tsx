@@ -11,9 +11,10 @@ import {
 } from "@/lib/feed/safety-status";
 import {
   feedReportAssetLabel,
-  isTypedTrailerNumber,
+  feedUnitNumberClassName,
 } from "@/lib/feed/trailer-unit-type";
 import { truncateFeedDescription } from "@/lib/feed/truncate";
+import { formatDamageLocationLabels } from "@/lib/damage/locations";
 import { formatFeedTimestamp } from "@/lib/format-time";
 import { displayFirstOrFull } from "@/lib/profile-name";
 import { usStateName } from "@/lib/us-states";
@@ -24,6 +25,8 @@ export type FeedListItem = {
   asset_type: AssetType;
   asset_number: string;
   report_comment: string | null;
+  /** Report-level damage location keys; used when description is empty. */
+  damage_locations?: string[] | null;
   captured_at: string;
   r2_url: string | null;
   photo_url: string | null;
@@ -36,16 +39,21 @@ export type FeedListItem = {
   reporter_work_state: string | null;
   /**
    * From `safety_inbox_items.status` when the viewer can read the referral
-   * (sender / safety / admin); otherwise null → “safety not notified”.
+   * (sender / safety / admin); otherwise null → “Safety Not Notified”.
    */
   safety_inbox_status: SafetyInboxStatus | null;
 };
 
 export function FeedReportCard({ item }: { item: FeedListItem }) {
   const rawSnippet = item.report_comment?.trim();
+  const locationSnippet = !rawSnippet
+    ? formatDamageLocationLabels(item.damage_locations).join(", ")
+    : "";
   const snippet = rawSnippet
     ? truncateFeedDescription(rawSnippet)
-    : null;
+    : locationSnippet
+      ? truncateFeedDescription(locationSnippet)
+      : null;
   const reporterName = displayFirstOrFull(item.reporter_full_name, "");
   const workState = item.reporter_work_state?.trim() || null;
   const workStateLabel = workState ? usStateName(workState) : null;
@@ -54,12 +62,7 @@ export function FeedReportCard({ item }: { item: FeedListItem }) {
     item.safety_inbox_status,
   );
   const typeLabel = feedReportAssetLabel(item.asset_type, item.asset_number);
-  const numberClass =
-    item.asset_type === "tractor"
-      ? "font-bold text-brand"
-      : isTypedTrailerNumber(item.asset_type, item.asset_number)
-        ? `font-bold ${pageTitleColorClassName}`
-        : "font-bold text-accent";
+  const numberClass = feedUnitNumberClassName;
 
   return (
     <article className="border-b border-border py-4 last:border-b-0">

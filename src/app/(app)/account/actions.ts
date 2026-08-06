@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { isProfileComplete } from "@/lib/auth/profile-complete";
+import { currentPayPeriod, todayDateString } from "@/lib/loads/date";
 import { composeFullName } from "@/lib/profile-name";
 import { createClient } from "@/lib/supabase/server";
 import {
@@ -449,17 +450,11 @@ export async function updatePayPeriod(input: {
   const endUtc = Date.UTC(ey, em - 1, ed);
   const lengthDays = Math.round((endUtc - startUtc) / 86_400_000) + 1;
 
-  if (lengthDays < 7 || lengthDays > 28) {
+  // Work periods are always biweekly (14 days inclusive Sat→Fri).
+  if (lengthDays !== 14) {
     return {
       ok: false,
-      error: "Pay period must be between 7 and 28 days (inclusive).",
-    };
-  }
-  if (lengthDays % 7 !== 0) {
-    return {
-      ok: false,
-      error:
-        "Period length must be a whole number of weeks (7, 14, 21, or 28 days) so periods stay Saturday–Friday.",
+      error: "Pay period must be biweekly (14 days, Saturday–Friday).",
     };
   }
 
@@ -611,11 +606,41 @@ export async function createAdpEntry(input: {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(periodEnd)) {
     return { ok: false, error: "Enter a valid period end date." };
   }
-  if (periodEnd < periodStart) {
-    return { ok: false, error: "Period end must be on or after start." };
-  }
   if (!Number.isFinite(adpAmount) || adpAmount < 0) {
     return { ok: false, error: "Enter a valid ADP amount." };
+  }
+
+  const { data: profile, error: profileError } = await supabase
+    .from("profiles")
+    .select("pay_period_start, next_pay_date")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  if (profileError) return { ok: false, error: profileError.message };
+
+  const seedStart = profile?.pay_period_start?.trim() ?? "";
+  const seedEnd = profile?.next_pay_date?.trim() ?? "";
+  if (!seedStart || !seedEnd) {
+    return {
+      ok: false,
+      error: "Set your pay period first, then enter ADP for a previous period.",
+    };
+  }
+
+  const current = currentPayPeriod(todayDateString(), seedStart, seedEnd);
+  const matched = currentPayPeriod(periodStart, seedStart, seedEnd);
+
+  if (matched.start !== periodStart || matched.end !== periodEnd) {
+    return {
+      ok: false,
+      error: "Pick a valid previous pay period from your deposit cadence.",
+    };
+  }
+  if (matched.start >= current.start) {
+    return {
+      ok: false,
+      error: "ADP is for previous pay periods only (after payday).",
+    };
   }
 
   const { error: insertError } = await supabase.from("adp_entries").upsert(

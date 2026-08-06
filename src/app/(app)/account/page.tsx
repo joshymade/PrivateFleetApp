@@ -229,7 +229,7 @@ export default async function AccountPage() {
 
           <AccountSettingsSection
             title="Pay period"
-            description="Pick your next deposit Thursday. We calculate the Saturday–Friday work window (usually biweekly). Deposit is the Thursday after the period ends — shown with the $ icon on Home. Later periods advance automatically."
+            description="Pick your next deposit Thursday. We calculate the biweekly Saturday–Friday work window (14 days). Deposit is the Thursday after the period ends — shown with the $ icon on Home. Prior and later periods stay on the same cadence."
           >
             <PayPeriodSettings
               payPeriodStart={profile?.pay_period_start ?? null}
@@ -239,9 +239,14 @@ export default async function AccountPage() {
 
           <AccountSettingsSection
             title="Average Daily Pay"
-            description="Enter your ADP each biweekly pay period. Latest ADP also shows on Home."
+            description="On payday, enter ADP for the previous biweekly period. Latest ADP also shows on Home."
           >
-            <AdpHistorySection entries={adpEntries} />
+            <AdpHistorySection
+              key={`${profile?.pay_period_start ?? ""}-${profile?.next_pay_date ?? ""}`}
+              entries={adpEntries}
+              payPeriodStart={profile?.pay_period_start ?? null}
+              nextPayDate={profile?.next_pay_date ?? null}
+            />
           </AccountSettingsSection>
 
           <AccountSettingsSection

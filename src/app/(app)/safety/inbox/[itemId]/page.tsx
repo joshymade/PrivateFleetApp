@@ -11,6 +11,7 @@ import {
   getSessionProfile,
 } from "@/lib/auth/profile";
 import { damagePhotoUrl } from "@/lib/damage-photo";
+import { formatDamageLocationLabels } from "@/lib/damage/locations";
 import { createClient } from "@/lib/supabase/server";
 import type {
   DamageReport,
@@ -72,7 +73,7 @@ export default async function SafetyInboxDetailPage({ params }: PageProps) {
       .maybeSingle(),
     supabase
       .from("damage_report_photos")
-      .select("id, damage_report_id, r2_key, r2_url, sort_order, created_at")
+      .select("id, damage_report_id, r2_key, r2_url, sort_order, damage_location, created_at")
       .eq("damage_report_id", inbox.damage_report_id)
       .order("sort_order", { ascending: true }),
   ]);
@@ -92,14 +93,25 @@ export default async function SafetyInboxDetailPage({ params }: PageProps) {
   > | null;
 
   const gallery = (photoRows ?? []) as DamageReportPhoto[];
-  const photoUrls =
+  const galleryPhotos =
     gallery.length > 0
       ? gallery
-          .map((p) => damagePhotoUrl(p.r2_url, p.r2_key))
-          .filter((u): u is string => Boolean(u))
+          .map((p) => {
+            const url = damagePhotoUrl(p.r2_url, p.r2_key);
+            if (!url) return null;
+            return {
+              url,
+              damageLocation: p.damage_location ?? null,
+            };
+          })
+          .filter((p): p is { url: string; damageLocation: string | null } =>
+            Boolean(p),
+          )
       : (() => {
           const cover = damagePhotoUrl(row.r2_url, row.r2_key);
-          return cover ? [cover] : [];
+          return cover
+            ? [{ url: cover, damageLocation: null as string | null }]
+            : [];
         })();
   const isSafetyViewer = session.role === "safety";
   const reportDriverId =
@@ -118,9 +130,9 @@ export default async function SafetyInboxDetailPage({ params }: PageProps) {
         </h1>
       </header>
 
-      {photoUrls.length > 0 ? (
+      {galleryPhotos.length > 0 ? (
         <ReportPhotoGallery
-          urls={photoUrls}
+          photos={galleryPhotos}
           altPrefix={`${assetLabel(row.asset_type)} ${row.asset_number} damage`}
         />
       ) : (
@@ -188,6 +200,28 @@ export default async function SafetyInboxDetailPage({ params }: PageProps) {
         </section>
       ) : null}
 
+      {(() => {
+        const locationLabels = formatDamageLocationLabels(row.damage_locations);
+        if (locationLabels.length === 0) return null;
+        return (
+          <section className="mt-4">
+            <h2 className="text-sm font-medium text-muted-foreground">
+              Damage location
+            </h2>
+            <ul className="mt-2 grid grid-cols-2 gap-2">
+              {locationLabels.map((label) => (
+                <li
+                  key={label}
+                  className="rounded-lg border border-border bg-card px-3 py-2.5 text-center text-sm font-medium text-foreground"
+                >
+                  {label}
+                </li>
+              ))}
+            </ul>
+          </section>
+        );
+      })()}
+
       <div className="mt-6 flex flex-col gap-3">
         <InboxStatusActions itemId={inbox.id} status={inbox.status} />
         {!isSafetyViewer ? (
@@ -202,7 +236,7 @@ export default async function SafetyInboxDetailPage({ params }: PageProps) {
             href={`/export?reportId=${encodeURIComponent(row.id)}&autodownload=1`}
             className="min-h-11 rounded-lg border border-border px-4 py-2.5 text-center text-sm font-medium text-foreground"
           >
-            Report Export
+            Save Report To Phone
           </Link>
         )}
       </div>

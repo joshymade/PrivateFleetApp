@@ -8,6 +8,7 @@ import { StopSealField } from "@/components/loads/stop-seal-field";
 import { StopStoreCountsField } from "@/components/loads/stop-store-counts-field";
 import { StopTrailerField } from "@/components/loads/stop-trailer-field";
 import { MaskedMoney } from "@/components/ui/masked-money";
+import { pageTitleColorClassName } from "@/components/ui/page-title";
 import type { EarningsDaySnapshot } from "@/lib/loads/daily-earnings-reminder";
 import {
   drivenMiles,
@@ -231,6 +232,7 @@ export function summarizeWorkWeekStats(
 
 export function WorkWeekHome({
   weekLabel,
+  depositLabel = null,
   days,
   stats,
   latestAdp,
@@ -244,6 +246,8 @@ export function WorkWeekHome({
   reminderDays = null,
 }: {
   weekLabel: string;
+  /** Upcoming deposit month/day (styled in header when period mode). */
+  depositLabel?: string | null;
   days: WorkWeekDaySummary[];
   stats: WorkStatsSummary;
   latestAdp: AdpEntry | null;
@@ -527,7 +531,7 @@ export function WorkWeekHome({
           <p className="font-medium">Set your pay period</p>
           <p className="mt-1 text-sm text-emerald-900/80 dark:text-emerald-100/80">
             Unlock the pay-period view on Home. Pick your next deposit
-            Thursday; work periods run Saturday–Friday.{" "}
+            Thursday; work periods are biweekly Saturday–Friday.{" "}
             <Link
               href="/account"
               className="font-semibold underline underline-offset-2"
@@ -544,7 +548,17 @@ export function WorkWeekHome({
             <h2 className="text-base font-semibold text-foreground">
               {periodMode ? "Current pay period" : "Current work week"}
             </h2>
-            <p className="mt-0.5 text-sm text-muted-foreground">{weekLabel}</p>
+            <p className="mt-0.5 text-sm text-muted-foreground">
+              {weekLabel}
+              {depositLabel ? (
+                <>
+                  {" · Deposit "}
+                  <span className={`font-bold ${pageTitleColorClassName}`}>
+                    {depositLabel}
+                  </span>
+                </>
+              ) : null}
+            </p>
           </div>
           <div className="shrink-0 rounded-xl border border-border bg-muted/60 px-3 py-2 text-right">
             <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
@@ -568,7 +582,9 @@ export function WorkWeekHome({
         <div className="overflow-hidden rounded-2xl border border-border bg-card">
           <div className="border-b border-border bg-muted/40 px-4 py-3.5">
             <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-              {periodMode ? "Period earnings" : "Week earnings"}
+              {periodMode
+                ? "Period earnings (current calculation)"
+                : "Week earnings"}
             </p>
             <p className="mt-1 text-2xl font-semibold tabular-nums tracking-tight text-foreground">
               <MaskedMoney amount={periodProjectedEarnings} />
@@ -582,7 +598,7 @@ export function WorkWeekHome({
               <PeriodStat
                 label="Days worked"
                 value={String(daysWorked)}
-                hint="Loads, pay, or punches"
+                hint="Logged Work"
               />
             </li>
             <li className="min-w-0 px-3.5 py-3">
@@ -669,26 +685,49 @@ function WorkWeekDayCard({
   const hasLoads = day.loadCount > 0;
   const canAddDailyPay = !hasLoads && day.isPast && canManage;
   const canEditPunches = canManage;
+  /** Past calendar days are muted; today/future keep normal (or accent) styling. */
+  const isPastDay = day.isPast;
+
+  const shellClass = isPastDay
+    ? "border-border bg-zinc-200/90 dark:border-zinc-700 dark:bg-zinc-800/80"
+    : day.isPayDay
+      ? "border-emerald-400/80 bg-emerald-100 ring-1 ring-emerald-400/50 dark:border-emerald-600/80 dark:bg-emerald-950/55 dark:ring-emerald-500/40"
+      : day.isToday
+        ? "border-accent/80 bg-accent/10 ring-1 ring-accent/40"
+        : day.isOffDay
+          ? "border-dashed border-border bg-muted/40"
+          : "border-border bg-card";
+
+  const dateLabelClass = isPastDay
+    ? "text-zinc-700 dark:text-zinc-300"
+    : "text-muted-foreground";
+  const metaLabelClass = isPastDay
+    ? "text-zinc-600 dark:text-zinc-400"
+    : "text-muted-foreground";
+  const valueClass = isPastDay
+    ? "font-semibold tabular-nums text-zinc-900 dark:text-zinc-100"
+    : "font-semibold tabular-nums";
 
   return (
     <article
       className={[
         "flex h-full min-h-[7.5rem] flex-col rounded-2xl border px-3 py-3",
-        day.isPayDay
-          ? "border-emerald-400/80 bg-emerald-100 ring-1 ring-emerald-400/50 dark:border-emerald-600/80 dark:bg-emerald-950/55 dark:ring-emerald-500/40"
-          : day.isToday
-            ? "border-accent/80 bg-accent/10 ring-1 ring-accent/40"
-            : day.isOffDay
-              ? "border-dashed border-border bg-muted/40"
-              : "border-border bg-card",
+        shellClass,
       ].join(" ")}
     >
       <div className="flex items-start justify-between gap-1.5">
         <div className="min-w-0">
-          <p className="truncate text-sm font-semibold text-foreground">
+          <p
+            className={[
+              "truncate text-sm font-semibold",
+              isPastDay
+                ? "text-zinc-900 dark:text-zinc-100"
+                : "text-foreground",
+            ].join(" ")}
+          >
             {weekday}
           </p>
-          <p className="text-xs text-muted-foreground">{monthDay}</p>
+          <p className={`text-xs ${dateLabelClass}`}>{monthDay}</p>
         </div>
         <div className="flex shrink-0 flex-col items-end gap-1">
           {day.isPayDay ? (
@@ -700,7 +739,14 @@ function WorkWeekDayCard({
             </span>
           ) : null}
           {day.isOffDay && !day.isPayDay ? (
-            <span className="rounded-md bg-foreground/5 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+            <span
+              className={[
+                "rounded-md px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide",
+                isPastDay
+                  ? "bg-zinc-900/10 text-zinc-700 dark:bg-zinc-100/10 dark:text-zinc-300"
+                  : "bg-foreground/5 text-muted-foreground",
+              ].join(" ")}
+            >
               Off
             </span>
           ) : null}
@@ -725,18 +771,18 @@ function WorkWeekDayCard({
             </p>
           ) : null}
           <div className="flex items-baseline justify-between gap-1">
-            <dt className="text-muted-foreground">Loads</dt>
-            <dd className="font-semibold tabular-nums">{day.loadCount}</dd>
+            <dt className={metaLabelClass}>Loads</dt>
+            <dd className={valueClass}>{day.loadCount}</dd>
           </div>
           <div className="flex items-baseline justify-between gap-1">
-            <dt className="text-muted-foreground">Earn</dt>
-            <dd className="truncate font-semibold tabular-nums">
+            <dt className={metaLabelClass}>Earn</dt>
+            <dd className={`truncate ${valueClass}`}>
               <MaskedMoney amount={day.totalEarnings} />
             </dd>
           </div>
           <div className="flex items-baseline justify-between gap-1">
-            <dt className="text-muted-foreground">Driven</dt>
-            <dd className="truncate font-semibold tabular-nums">
+            <dt className={metaLabelClass}>Driven</dt>
+            <dd className={`truncate ${valueClass}`}>
               {day.totalDrivenMiles == null
                 ? "—"
                 : milesLabel(day.totalDrivenMiles)}
@@ -750,7 +796,14 @@ function WorkWeekDayCard({
           canEdit={canAddDailyPay}
         />
       ) : (
-        <p className="mt-auto rounded-xl border border-dashed border-border/80 bg-background/50 px-2 py-2 text-center text-xs text-muted-foreground dark:bg-background/20">
+        <p
+          className={[
+            "mt-auto rounded-xl border border-dashed px-2 py-2 text-center text-xs",
+            isPastDay
+              ? "border-zinc-400/70 bg-zinc-100/80 text-zinc-700 dark:border-zinc-600 dark:bg-zinc-900/40 dark:text-zinc-300"
+              : "border-border/80 bg-background/50 text-muted-foreground dark:bg-background/20",
+          ].join(" ")}
+        >
           No load logged
         </p>
       )}

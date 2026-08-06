@@ -32,13 +32,15 @@ export type Profile = {
   off_days: number[];
   /**
    * Seed start of pay period (YYYY-MM-DD, Saturday inclusive).
-   * With next_pay_date (Friday end), length drives auto-advance. Null until set.
+   * With next_pay_date (Friday end), always biweekly (14 days); periods
+   * auto-advance ±n×14. Null until set.
    */
   pay_period_start: string | null;
   /**
-   * Seed end of pay period (YYYY-MM-DD, Friday). Later periods = start/end + n×length.
-   * Deposit/pay icon is Thursday after that Friday (period end + 6, derived in app).
-   * Null until the driver sets the range on Account.
+   * Seed end of pay period (YYYY-MM-DD, Friday). Later/prior periods =
+   * start/end ± n×14. Deposit/pay icon is Thursday after that Friday
+   * (period end + 6, derived in app). Null until the driver sets the range
+   * on Account.
    */
   next_pay_date: string | null;
   /**
@@ -234,6 +236,11 @@ export type DamageReport = {
   /** Driver description of damage at upload (not a Feed reply). */
   report_comment: string | null;
   /**
+   * Trailer damage area tags (stable keys from DAMAGE_LOCATION_OPTIONS).
+   * Empty for tractor reports or when none selected.
+   */
+  damage_locations: string[];
+  /**
    * Detail page view counter (each open of /feed/[id]).
    * Distinct from damage_notices ("Notice").
    */
@@ -248,6 +255,11 @@ export type DamageReportPhoto = {
   r2_key: string;
   r2_url: string | null;
   sort_order: number;
+  /**
+   * Stable damage location key for this photo (DAMAGE_LOCATION_OPTIONS).
+   * Required for new trailer photos; null on legacy rows.
+   */
+  damage_location: string | null;
   created_at: string;
 };
 

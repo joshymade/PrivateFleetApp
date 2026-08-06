@@ -20,13 +20,15 @@ export function LoadsMonthTotals({ totals }: { totals: MonthLoadTotals }) {
           </dd>
         </div>
         <div>
-          <dt className="text-muted-foreground">Earnings</dt>
+          <dt className="text-muted-foreground">
+            Earnings (current calculation)
+          </dt>
           <dd className="mt-0.5 text-lg font-semibold tabular-nums text-foreground">
             <MaskedMoney amount={totals.earnings} />
           </dd>
         </div>
         <div>
-          <dt className="text-muted-foreground">Driven vs paid</dt>
+          <dt className="text-muted-foreground">Driven versus Paid miles</dt>
           <dd className="mt-0.5 text-lg font-semibold tabular-nums text-foreground">
             {formatMiles(totals.drivenMiles)} / {formatMiles(totals.paidMiles)}
           </dd>

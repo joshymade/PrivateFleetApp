@@ -6,7 +6,9 @@ import {
   getSessionProfile,
   PROFILE_SETUP_PATH,
 } from "@/lib/auth/profile";
-import { getRecentLoadsForDriver } from "@/lib/loads/queries";
+import { resolveCurrentTrailerForDamage } from "@/lib/loads/format";
+import { getActiveLoadForDriver } from "@/lib/loads/queries";
+import { formatTractorNumber } from "@/lib/tractor-number";
 import type { AssetType } from "@/types/database";
 
 type ReportPageProps = {
@@ -30,14 +32,35 @@ export default async function ReportPage({ searchParams }: ReportPageProps) {
   const params = searchParams ? await searchParams : {};
   const submittedId = params.submitted;
   const initialAssetType = parseAssetType(params.type);
-  const recentLoads = await getRecentLoadsForDriver(session.userId, 10);
+
+  const activeLoad = await getActiveLoadForDriver(session.userId);
+  const truckRaw =
+    activeLoad?.truck_number?.trim() ||
+    session.profile?.current_truck_number?.trim() ||
+    null;
+  const trailerRaw = activeLoad
+    ? resolveCurrentTrailerForDamage(
+        activeLoad.load_stops,
+        activeLoad.trailer_number,
+      )
+    : null;
+
+  const activeUnit =
+    activeLoad && (truckRaw || trailerRaw)
+      ? {
+          loadId: activeLoad.id,
+          truckNumber: truckRaw ? formatTractorNumber(truckRaw) : null,
+          trailerNumber: trailerRaw,
+          routeNumber: activeLoad.route_number?.trim() || null,
+        }
+      : null;
 
   return (
     <DamageCaptureForm
       key={`${submittedId ?? "new"}-${initialAssetType ?? "tractor"}`}
       initialAssetType={initialAssetType}
       submittedId={submittedId}
-      recentLoads={recentLoads}
+      activeUnit={activeUnit}
     />
   );
 }

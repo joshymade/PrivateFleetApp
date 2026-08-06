@@ -36,6 +36,28 @@ export function resolveCurrentTrailerFromStops(
 }
 
 /**
+ * Trailer for damage-report auto-select: prefer a saved trailer on the
+ * current stop (first undeparted, or last when all departed) even before
+ * that stop is departed; otherwise last departed stop with a trailer, then
+ * optional `loads.trailer_number` snapshot.
+ */
+export function resolveCurrentTrailerForDamage(
+  stops: Pick<LoadStop, "trailer_number" | "delivery_order" | "completed">[],
+  loadTrailerNumber?: string | null,
+): string | null {
+  const ordered = [...stops].sort((a, b) => a.delivery_order - b.delivery_order);
+  const current =
+    ordered.find((s) => !s.completed) ?? ordered[ordered.length - 1] ?? null;
+  const fromCurrentStop = current?.trailer_number?.trim() || null;
+  if (fromCurrentStop) return fromCurrentStop;
+
+  return (
+    resolveCurrentTrailerFromStops(stops) ??
+    (loadTrailerNumber?.trim() || null)
+  );
+}
+
+/**
  * Current stop for Home quick view: first stop not yet departed
  * (`completed === false`), by delivery_order. When all are departed, returns
  * the last departed stop with `allDeparted: true`.

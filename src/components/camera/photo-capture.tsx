@@ -22,6 +22,12 @@ type PhotoCaptureProps = {
   disabled?: boolean;
   /** How many grid slots to show when `multiple` is true (default 8). */
   maxFiles?: number;
+  /** When set, each filled photo shows a location picker. */
+  locationOptions?: readonly { value: string; label: string }[];
+  locations?: (string | null)[];
+  onLocationsChange?: (locations: (string | null)[]) => void;
+  /** Require a location on each photo before submit (trailer). */
+  requireLocation?: boolean;
 };
 
 type PreviewItem = {
@@ -46,6 +52,10 @@ export function PhotoCapture({
   onChangeMultiple,
   disabled,
   maxFiles = 8,
+  locationOptions,
+  locations,
+  onLocationsChange,
+  requireLocation = false,
 }: PhotoCaptureProps) {
   const tipId = useId();
   const cameraInputId = useId();
@@ -144,11 +154,26 @@ export function PhotoCapture({
         const next = [...values];
         next[slotIndex] = incoming[0]!;
         onChangeMultiple?.(next);
+        if (onLocationsChange && locations) {
+          const nextLocs = [...locations];
+          while (nextLocs.length < next.length) nextLocs.push(null);
+          nextLocs[slotIndex] = null;
+          onLocationsChange(nextLocs.slice(0, next.length));
+        }
       } else {
         const room = slotCount - values.length;
-        onChangeMultiple?.(
-          [...values, ...incoming.slice(0, room)].slice(0, slotCount),
+        const next = [...values, ...incoming.slice(0, room)].slice(
+          0,
+          slotCount,
         );
+        onChangeMultiple?.(next);
+        if (onLocationsChange) {
+          const prev = locations ?? [];
+          const nextLocs = next.map((_, i) =>
+            i < values.length ? (prev[i] ?? null) : null,
+          );
+          onLocationsChange(nextLocs);
+        }
       }
     } else {
       onChange?.(selected[0] ?? null);
@@ -161,15 +186,31 @@ export function PhotoCapture({
   function removeAt(index: number) {
     if (multiple) {
       onChangeMultiple?.(values.filter((_, i) => i !== index));
+      if (onLocationsChange && locations) {
+        onLocationsChange(locations.filter((_, i) => i !== index));
+      }
     } else {
       onChange?.(null);
     }
   }
 
+  function setLocationAt(index: number, next: string) {
+    if (!onLocationsChange) return;
+    const prev = locations ?? [];
+    const aligned = values.map((_, i) => prev[i] ?? null);
+    aligned[index] = next || null;
+    onLocationsChange(aligned);
+  }
+
+  const showLocations =
+    Boolean(locationOptions?.length) && Boolean(onLocationsChange);
+
   const gridClass =
     slotCount === 1
       ? "grid grid-cols-1 gap-2 max-w-[11rem]"
-      : "grid grid-cols-4 gap-2";
+      : showLocations
+        ? "grid grid-cols-2 gap-3"
+        : "grid grid-cols-4 gap-2";
 
   const cameraLabelDisabled = disabled || !canAddMore;
 
@@ -254,31 +295,64 @@ export function PhotoCapture({
           const preview = previews[index];
 
           if (preview) {
+            const locValue = locations?.[index] ?? "";
+            const locMissing = requireLocation && !locValue;
             return (
-              <li key={`filled-${preview.key}`} className="relative">
-                <button
-                  type="button"
-                  disabled={disabled}
-                  onClick={() => openLibraryPicker(index)}
-                  aria-label={`Replace photo ${index + 1} of ${slotCount}`}
-                  className="relative aspect-square w-full overflow-hidden rounded-xl border border-border bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 disabled:opacity-50"
-                >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={preview.url}
-                    alt={`Selected damage photo ${index + 1}`}
-                    className="h-full w-full object-cover"
-                  />
-                </button>
-                <button
-                  type="button"
-                  disabled={disabled}
-                  onClick={() => removeAt(index)}
-                  aria-label={`Remove photo ${index + 1} of ${slotCount}`}
-                  className="absolute right-1.5 top-1.5 flex h-7 w-7 items-center justify-center rounded-full bg-background/90 text-sm font-medium text-foreground shadow-sm ring-1 ring-border disabled:opacity-50"
-                >
-                  <span aria-hidden="true">×</span>
-                </button>
+              <li key={`filled-${preview.key}`} className="space-y-1.5">
+                <div className="relative">
+                  <button
+                    type="button"
+                    disabled={disabled}
+                    onClick={() => openLibraryPicker(index)}
+                    aria-label={`Replace photo ${index + 1} of ${slotCount}`}
+                    className="relative aspect-square w-full overflow-hidden rounded-xl border border-border bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 disabled:opacity-50"
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={preview.url}
+                      alt={`Selected damage photo ${index + 1}`}
+                      className="h-full w-full object-cover"
+                    />
+                  </button>
+                  <button
+                    type="button"
+                    disabled={disabled}
+                    onClick={() => removeAt(index)}
+                    aria-label={`Remove photo ${index + 1} of ${slotCount}`}
+                    className="absolute right-1.5 top-1.5 flex h-7 w-7 items-center justify-center rounded-full bg-background/90 text-sm font-medium text-foreground shadow-sm ring-1 ring-border disabled:opacity-50"
+                  >
+                    <span aria-hidden="true">×</span>
+                  </button>
+                </div>
+                {showLocations && locationOptions ? (
+                  <label className="block space-y-1">
+                    <span className="sr-only">
+                      Damage location for photo {index + 1}
+                    </span>
+                    <select
+                      value={locValue}
+                      disabled={disabled}
+                      required={requireLocation}
+                      onChange={(e) => setLocationAt(index, e.target.value)}
+                      aria-invalid={locMissing || undefined}
+                      className={[
+                        "w-full min-h-10 rounded-lg border bg-background px-2 py-2 text-xs text-foreground outline-none focus:border-ring focus:ring-2 focus:ring-ring/30 disabled:opacity-50",
+                        locMissing
+                          ? "border-destructive/60"
+                          : "border-border",
+                      ].join(" ")}
+                    >
+                      <option value="">
+                        {requireLocation ? "Location required…" : "Location…"}
+                      </option>
+                      {locationOptions.map((opt) => (
+                        <option key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                ) : null}
               </li>
             );
           }

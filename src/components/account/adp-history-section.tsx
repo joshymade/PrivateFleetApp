@@ -15,28 +15,62 @@ import { createAdpEntry } from "@/app/(app)/account/actions";
 import { MaskedMoney } from "@/components/ui/masked-money";
 import { useHideMoney } from "@/lib/hide-money";
 import { displayMoney } from "@/lib/money";
-import { toDateString } from "@/lib/loads/date";
+import {
+  formatPayPeriodLabel,
+  previousPayPeriods,
+  todayDateString,
+} from "@/lib/loads/date";
 import type { AdpEntry } from "@/types/database";
 
-function defaultPeriodStart(): string {
-  const d = new Date();
-  d.setDate(d.getDate() - 13);
-  return toDateString(d);
-}
+const PREVIOUS_PERIOD_OPTIONS = 12;
 
-function defaultPeriodEnd(start: string): string {
-  const [y, m, d] = start.split("-").map(Number);
-  return toDateString(new Date(y, m - 1, d + 13));
-}
-
-export function AdpHistorySection({ entries }: { entries: AdpEntry[] }) {
+export function AdpHistorySection({
+  entries,
+  payPeriodStart,
+  nextPayDate,
+}: {
+  entries: AdpEntry[];
+  payPeriodStart: string | null;
+  nextPayDate: string | null;
+}) {
   const router = useRouter();
   const { hideMoney } = useHideMoney();
-  const [periodStart, setPeriodStart] = useState(defaultPeriodStart);
-  const [periodEnd, setPeriodEnd] = useState(() =>
-    defaultPeriodEnd(defaultPeriodStart()),
+  const seedReady = Boolean(payPeriodStart && nextPayDate);
+
+  const priorPeriods = useMemo(() => {
+    if (!payPeriodStart || !nextPayDate) return [];
+    return previousPayPeriods(
+      todayDateString(),
+      payPeriodStart,
+      nextPayDate,
+      PREVIOUS_PERIOD_OPTIONS,
+    );
+  }, [payPeriodStart, nextPayDate]);
+
+  const amountByStart = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const e of entries) {
+      map.set(e.period_start, Number(e.adp_amount));
+    }
+    return map;
+  }, [entries]);
+
+  const [selectedStart, setSelectedStart] = useState(
+    () => priorPeriods[0]?.start ?? "",
   );
-  const [amount, setAmount] = useState("");
+  const selectedPeriod =
+    priorPeriods.find((p) => p.start === selectedStart) ??
+    priorPeriods[0] ??
+    null;
+
+  const [amount, setAmount] = useState(() => {
+    const start = priorPeriods[0]?.start;
+    if (!start) return "";
+    const existing = amountByStart.get(start);
+    return existing != null && Number.isFinite(existing)
+      ? String(existing)
+      : "";
+  });
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
@@ -53,21 +87,34 @@ export function AdpHistorySection({ entries }: { entries: AdpEntry[] }) {
     [entries],
   );
 
+  function onSelectPeriod(start: string) {
+    setSelectedStart(start);
+    setSaved(false);
+    setError(null);
+    const existing = amountByStart.get(start);
+    setAmount(
+      existing != null && Number.isFinite(existing) ? String(existing) : "",
+    );
+  }
+
   function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
     setSaved(false);
+    if (!selectedPeriod) {
+      setError("Pick a previous pay period.");
+      return;
+    }
     startTransition(async () => {
       const result = await createAdpEntry({
-        periodStart,
-        periodEnd,
+        periodStart: selectedPeriod.start,
+        periodEnd: selectedPeriod.end,
         adpAmount: Number(amount),
       });
       if (!result.ok) {
         setError(result.error);
         return;
       }
-      setAmount("");
       setSaved(true);
       router.refresh();
     });
@@ -109,64 +156,71 @@ export function AdpHistorySection({ entries }: { entries: AdpEntry[] }) {
         </p>
       )}
 
-      <form onSubmit={onSubmit} className="space-y-3">
-        <div className="grid grid-cols-2 gap-3">
-          <label className="block text-sm" htmlFor="adp-period-start">
-            <span className="mb-1 block font-medium">Period start</span>
-            <input
-              id="adp-period-start"
-              type="date"
+      {!seedReady ? (
+        <p className="rounded-xl border border-dashed border-border px-3 py-4 text-sm text-muted-foreground">
+          Set your pay period above first. ADP uses previous biweekly periods
+          from that deposit cadence.
+        </p>
+      ) : (
+        <form onSubmit={onSubmit} className="space-y-3">
+          <label className="block text-sm" htmlFor="adp-period">
+            <span className="mb-1 block font-medium">Previous pay period</span>
+            <select
+              id="adp-period"
               required
-              value={periodStart}
+              value={selectedPeriod?.start ?? ""}
+              onChange={(e) => onSelectPeriod(e.target.value)}
+              className="min-h-11 w-full rounded-xl border border-border bg-background px-3 text-base"
+            >
+              {priorPeriods.map((p) => {
+                const hasEntry = amountByStart.has(p.start);
+                return (
+                  <option key={p.start} value={p.start}>
+                    {formatPayPeriodLabel(p.start, p.end)}
+                    {hasEntry ? " (saved)" : ""}
+                  </option>
+                );
+              })}
+            </select>
+            <span className="mt-1 block text-xs text-muted-foreground">
+              ADP posts on payday for the period that just ended — pick that
+              previous window.
+            </span>
+          </label>
+          <label className="block text-sm" htmlFor="adp-amount">
+            <span className="mb-1 block font-medium">ADP amount ($)</span>
+            <input
+              id="adp-amount"
+              inputMode="decimal"
+              required
+              value={amount}
               onChange={(e) => {
-                setPeriodStart(e.target.value);
-                setPeriodEnd(defaultPeriodEnd(e.target.value));
+                setAmount(e.target.value);
+                setSaved(false);
               }}
+              placeholder="e.g. 285.00"
               className="min-h-11 w-full rounded-xl border border-border bg-background px-3 text-base"
             />
           </label>
-          <label className="block text-sm" htmlFor="adp-period-end">
-            <span className="mb-1 block font-medium">Period end</span>
-            <input
-              id="adp-period-end"
-              type="date"
-              required
-              value={periodEnd}
-              onChange={(e) => setPeriodEnd(e.target.value)}
-              className="min-h-11 w-full rounded-xl border border-border bg-background px-3 text-base"
-            />
-          </label>
-        </div>
-        <label className="block text-sm" htmlFor="adp-amount">
-          <span className="mb-1 block font-medium">ADP amount ($)</span>
-          <input
-            id="adp-amount"
-            inputMode="decimal"
-            required
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-            placeholder="e.g. 285.00"
-            className="min-h-11 w-full rounded-xl border border-border bg-background px-3 text-base"
-          />
-        </label>
-        {error ? (
-          <p className="text-sm text-destructive" role="alert">
-            {error}
-          </p>
-        ) : null}
-        {saved ? (
-          <p className="text-sm text-emerald-700 dark:text-emerald-400">
-            ADP saved.
-          </p>
-        ) : null}
-        <button
-          type="submit"
-          disabled={pending}
-          className="min-h-11 w-full rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground disabled:opacity-60"
-        >
-          {pending ? "Saving…" : "Add pay-period ADP"}
-        </button>
-      </form>
+          {error ? (
+            <p className="text-sm text-destructive" role="alert">
+              {error}
+            </p>
+          ) : null}
+          {saved ? (
+            <p className="text-sm text-emerald-700 dark:text-emerald-400">
+              ADP saved.
+            </p>
+          ) : null}
+          <button
+            type="submit"
+            disabled={pending || !selectedPeriod}
+            className="min-h-11 w-full rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground disabled:opacity-60"
+          >
+            {pending ? "Saving…" : "Save ADP"}
+          </button>
+        </form>
+      )}
 
       {entries.length > 0 ? (
         <ul className="divide-y divide-border rounded-xl border border-border">
@@ -179,7 +233,7 @@ export function AdpHistorySection({ entries }: { entries: AdpEntry[] }) {
                 className="flex items-center justify-between px-3 py-2 text-sm"
               >
                 <span className="text-muted-foreground">
-                  {e.period_start} → {e.period_end}
+                  {formatPayPeriodLabel(e.period_start, e.period_end)}
                 </span>
                 <span className="font-medium tabular-nums">
                   <MaskedMoney amount={Number(e.adp_amount)} />

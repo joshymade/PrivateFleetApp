@@ -12,7 +12,6 @@ import {
   formatLongDate,
   formatPayPeriodLabel,
   payPeriodFromDepositDay,
-  payPeriodLengthDays,
   todayDateString,
   weekdayOf,
   WEEKDAY_LABELS,
@@ -37,21 +36,12 @@ export function PayPeriodSettings({
   nextPayDate: string | null;
 }) {
   const router = useRouter();
-  const initialLength =
-    payPeriodStart && nextPayDate
-      ? payPeriodLengthDays(payPeriodStart, nextPayDate)
-      : DEFAULT_PAY_PERIOD_LENGTH_DAYS;
   const initialDeposit =
     nextPayDate && isValidDateInput(nextPayDate)
       ? depositDayForPeriodEnd(nextPayDate)
       : "";
 
   const [deposit, setDeposit] = useState(initialDeposit);
-  const [lengthDays, setLengthDays] = useState(
-    initialLength >= 7 && initialLength <= 28 && initialLength % 7 === 0
-      ? initialLength
-      : DEFAULT_PAY_PERIOD_LENGTH_DAYS,
-  );
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
@@ -60,34 +50,44 @@ export function PayPeriodSettings({
     if (!isValidDateInput(deposit)) return null;
 
     const depositWeekday = weekdayOf(deposit);
-    const derived = payPeriodFromDepositDay(deposit, lengthDays);
+    const derived = payPeriodFromDepositDay(deposit);
     const today = todayDateString();
     const current = currentPayPeriod(today, derived.start, derived.end);
-    const nextStart = addCalendarDays(current.start, lengthDays);
-    const nextEnd = addCalendarDays(current.end, lengthDays);
+    const nextStart = addCalendarDays(
+      current.start,
+      DEFAULT_PAY_PERIOD_LENGTH_DAYS,
+    );
+    const nextEnd = addCalendarDays(current.end, DEFAULT_PAY_PERIOD_LENGTH_DAYS);
+    const priorStart = addCalendarDays(
+      current.start,
+      -DEFAULT_PAY_PERIOD_LENGTH_DAYS,
+    );
+    const priorEnd = addCalendarDays(
+      current.end,
+      -DEFAULT_PAY_PERIOD_LENGTH_DAYS,
+    );
 
     return {
       ...derived,
       depositWeekday,
       depositWeekdayLabel: WEEKDAY_LABELS[depositWeekday]!,
       isThursday: depositWeekday === DEPOSIT_WEEKDAY,
-      lengthOk: lengthDays >= 7 && lengthDays <= 28 && lengthDays % 7 === 0,
       current,
       nextStart,
       nextEnd,
+      priorStart,
+      priorEnd,
     };
-  }, [deposit, lengthDays]);
+  }, [deposit]);
 
   function onSave() {
     setError(null);
     setSaved(false);
-    if (!preview || !preview.isThursday || !preview.lengthOk) {
+    if (!preview || !preview.isThursday) {
       setError(
         !preview
           ? "Pick your next deposit (pay) date."
-          : !preview.isThursday
-            ? "Deposit day must be a Thursday."
-            : "Period length must be 7, 14, 21, or 28 days.",
+          : "Deposit day must be a Thursday.",
       );
       return;
     }
@@ -107,7 +107,6 @@ export function PayPeriodSettings({
 
   function onClear() {
     setDeposit("");
-    setLengthDays(DEFAULT_PAY_PERIOD_LENGTH_DAYS);
     setError(null);
     setSaved(false);
     startTransition(async () => {
@@ -142,25 +141,11 @@ export function PayPeriodSettings({
         />
       </label>
 
-      <label className="block text-sm" htmlFor="pay-period-length">
-        <span className="mb-1 block text-xs text-muted-foreground">
-          Work period length
-        </span>
-        <select
-          id="pay-period-length"
-          value={lengthDays}
-          onChange={(e) => {
-            setLengthDays(Number(e.target.value));
-            setSaved(false);
-          }}
-          className="min-h-11 w-full rounded-xl border border-border bg-background px-3 text-base text-foreground"
-        >
-          <option value={7}>1 week (7 days)</option>
-          <option value={14}>Biweekly (14 days)</option>
-          <option value={21}>3 weeks (21 days)</option>
-          <option value={28}>4 weeks (28 days)</option>
-        </select>
-      </label>
+      <p className="text-xs text-muted-foreground">
+        Work periods are always biweekly ({DEFAULT_PAY_PERIOD_LENGTH_DAYS} days,
+        Saturday–Friday). Prior periods line up on the same cadence from this
+        deposit.
+      </p>
 
       {preview ? (
         <div className="space-y-1 text-xs text-muted-foreground">
@@ -174,10 +159,10 @@ export function PayPeriodSettings({
             )}
             .
           </p>
-          {preview.isThursday && preview.lengthOk ? (
+          {preview.isThursday ? (
             <>
               <p>
-                Work period (Sat–Fri):{" "}
+                Seed work period (Sat–Fri):{" "}
                 <span className="font-medium text-foreground">
                   {formatPayPeriodLabel(preview.start, preview.end)}
                 </span>
@@ -199,6 +184,13 @@ export function PayPeriodSettings({
                 .
               </p>
               <p>
+                Previous period:{" "}
+                <span className="font-medium text-foreground">
+                  {formatPayPeriodLabel(preview.priorStart, preview.priorEnd)}
+                </span>
+                .
+              </p>
+              <p>
                 Next period auto-advances to{" "}
                 <span className="font-medium text-foreground">
                   {formatPayPeriodLabel(preview.nextStart, preview.nextEnd)}
@@ -210,8 +202,8 @@ export function PayPeriodSettings({
         </div>
       ) : (
         <p className="text-xs text-muted-foreground">
-          Pick your next deposit Thursday. We fill in the matching Saturday–Friday
-          work window (default biweekly).
+          Pick your next deposit Thursday. We fill in the matching biweekly
+          Saturday–Friday work window.
         </p>
       )}
 

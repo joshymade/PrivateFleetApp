@@ -4,7 +4,7 @@ import { FeedPagination } from "@/components/feed/feed-pagination";
 import { FeedReportCard } from "@/components/feed/feed-report-card";
 import { FeedSearch } from "@/components/feed/feed-search";
 import { BackLink } from "@/components/nav/back-link";
-import { pageTitleClassName, pageTitleColorClassName } from "@/components/ui/page-title";
+import { pageTitleClassName } from "@/components/ui/page-title";
 import { damagePhotoUrl } from "@/lib/damage-photo";
 import {
   assetNumberDigits,
@@ -14,6 +14,7 @@ import {
 } from "@/lib/feed/asset-number";
 import {
   feedReportAssetLabel,
+  feedUnitNumberClassName,
   isTypedTrailerNumber,
   trailerUnitKindFromNumber,
   trailerUnitKindLabel,
@@ -41,6 +42,7 @@ type ReportRow = Pick<
   | "driver_id"
   | "reported_by"
   | "report_comment"
+  | "damage_locations"
   | "captured_at"
   | "latitude"
   | "longitude"
@@ -129,7 +131,7 @@ export default async function FeedUnitPage({ params, searchParams }: PageProps) 
   const { data, error } = await supabase
     .from("damage_reports_with_notice_count")
     .select(
-      "id, asset_type, asset_number, driver_id, reported_by, report_comment, captured_at, latitude, longitude, r2_key, r2_url, notice_count, view_count",
+      "id, asset_type, asset_number, driver_id, reported_by, report_comment, damage_locations, captured_at, latitude, longitude, r2_key, r2_url, notice_count, view_count",
     )
     .or(assetFilter)
     .order("captured_at", { ascending: false })
@@ -153,14 +155,7 @@ export default async function FeedUnitPage({ params, searchParams }: PageProps) 
       : inferredKind
         ? trailerUnitKindLabel(inferredKind)
         : null;
-  const numberClass =
-    assetType === "tractor"
-      ? "font-bold text-brand"
-      : typedTrailer
-        ? `font-bold ${pageTitleColorClassName}`
-        : assetType === "trailer"
-          ? "font-bold text-accent"
-          : "font-bold text-foreground";
+  const numberClass = feedUnitNumberClassName;
 
   const reportIds = rows.map((r) => r.id);
   const reporterIds = [...new Set(rows.map((r) => r.reported_by))];
@@ -281,6 +276,7 @@ export default async function FeedUnitPage({ params, searchParams }: PageProps) 
                   asset_type: row.asset_type as AssetType,
                   asset_number: row.asset_number,
                   report_comment: row.report_comment,
+                  damage_locations: row.damage_locations,
                   captured_at: row.captured_at,
                   r2_url: row.r2_url,
                   photo_url: damagePhotoUrl(row.r2_url, row.r2_key),

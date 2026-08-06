@@ -545,6 +545,7 @@ export function buildMonthChartDays(
 export {
   formatTrailerSequence,
   resolveCurrentStop,
+  resolveCurrentTrailerForDamage,
   resolveCurrentTrailerFromStops,
   routeSnippet,
   statusLabel,

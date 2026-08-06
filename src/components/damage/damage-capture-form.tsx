@@ -16,56 +16,65 @@ import {
   driverNeedsProfileSetup,
   PROFILE_INCOMPLETE_MESSAGE,
 } from "@/lib/auth/profile-complete";
+import {
+  DAMAGE_LOCATION_OPTIONS,
+  sanitizeDamageLocations,
+  type DamageLocationValue,
+} from "@/lib/damage/locations";
 import { uploadDamagePhoto } from "@/lib/damage-upload";
 import { readGeolocation } from "@/lib/geolocation";
-import { formatShortDate } from "@/lib/loads/date";
-import { formatLoadLabel } from "@/lib/loads/format";
-import type { RecentLoadOption } from "@/lib/loads/queries";
-import { createClient } from "@/lib/supabase/client";
 import {
   formatTractorNumber,
   isValidTractorNumber,
   TRACTOR_NUMBER_PLACEHOLDER,
 } from "@/lib/tractor-number";
+import { createClient } from "@/lib/supabase/client";
 import type { AssetType, DamageReport, UserRole } from "@/types/database";
+
+export type ActiveUnitLinkOption = {
+  loadId: string;
+  truckNumber: string | null;
+  trailerNumber: string | null;
+  routeNumber?: string | null;
+};
 
 type DamageCaptureFormProps = {
   /** Prefill from `?type=` when deep-linking from old tractor/trailer routes. */
   initialAssetType?: AssetType;
   /** Show success banner after redirect from submit. */
   submittedId?: string;
-  /** Driver's recent loads for optional linking (server-fetched). */
-  recentLoads?: RecentLoadOption[];
+  /** Current active load truck/trailer for auto-select. */
+  activeUnit?: ActiveUnitLinkOption | null;
 };
 
 type SubmitState = "idle" | "locating" | "uploading" | "saving";
+type ActiveUnitKind = "" | "tractor" | "trailer";
 
 const MAX_PHOTOS = 8;
 const TRAILER_NUMBER_PLACEHOLDER = "313243";
 
-function loadOptionLabel(load: RecentLoadOption): string {
-  const date = formatShortDate(load.load_date);
-  const route = load.route_number ? ` · Route ${load.route_number}` : "";
-  return `${formatLoadLabel(load.load_number)} · ${date}${route}`;
-}
-
 export function DamageCaptureForm({
   initialAssetType = "tractor",
   submittedId,
-  recentLoads = [],
+  activeUnit = null,
 }: DamageCaptureFormProps) {
   const router = useRouter();
   const [assetType, setAssetType] = useState<AssetType>(initialAssetType);
   const [assetNumber, setAssetNumber] = useState("");
   const [reportComment, setReportComment] = useState("");
+  const [damageLocations, setDamageLocations] = useState<
+    DamageLocationValue[]
+  >([]);
+  const [activeUnitKind, setActiveUnitKind] = useState<ActiveUnitKind>("");
   const [selectedLoadId, setSelectedLoadId] = useState("");
   const [photos, setPhotos] = useState<File[]>([]);
+  const [photoLocations, setPhotoLocations] = useState<(string | null)[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [phase, setPhase] = useState<SubmitState>("idle");
 
   const isTractor = assetType === "tractor";
+  const isTrailer = assetType === "trailer";
   const busy = phase !== "idle";
-  // Label/placeholder MUST follow radio state — never a combined "Tractor or Trailer" string.
   const assetNumberLabel =
     assetType === "tractor" ? "Tractor Number" : "Trailer Number";
   const assetNumberPlaceholder =
@@ -76,22 +85,78 @@ export function DamageCaptureForm({
     ? `Six digits, hyphen optional (e.g. ${TRACTOR_NUMBER_PLACEHOLDER}).`
     : null;
 
-  const currentLoad = recentLoads.find((l) => l.isCurrent) ?? null;
+  const currentTruck = activeUnit?.truckNumber?.trim() || null;
+  const currentTrailer = activeUnit?.trailerNumber?.trim() || null;
+  const hasActiveUnits = Boolean(currentTruck || currentTrailer);
+
+  function applyActiveUnit(kind: ActiveUnitKind) {
+    setActiveUnitKind(kind);
+    if (!kind || !activeUnit) {
+      setSelectedLoadId("");
+      return;
+    }
+    if (kind === "tractor" && currentTruck) {
+      const typeChanged = assetType !== "tractor";
+      setAssetType("tractor");
+      setAssetNumber(formatTractorNumber(currentTruck));
+      setSelectedLoadId(activeUnit.loadId);
+      if (typeChanged) {
+        setDamageLocations([]);
+        setPhotoLocations([]);
+        setPhotos([]);
+      }
+      setError(null);
+      return;
+    }
+    if (kind === "trailer" && currentTrailer) {
+      const typeChanged = assetType !== "trailer";
+      setAssetType("trailer");
+      setAssetNumber(currentTrailer);
+      setSelectedLoadId(activeUnit.loadId);
+      if (typeChanged) {
+        setPhotos([]);
+        setPhotoLocations([]);
+        setDamageLocations([]);
+      }
+      setError(null);
+    }
+  }
 
   function handleAssetTypeChange(next: AssetType) {
     if (next === assetType) return;
     setAssetType(next);
     setAssetNumber("");
     setPhotos([]);
+    setPhotoLocations([]);
+    setDamageLocations([]);
+    setActiveUnitKind("");
+    setSelectedLoadId("");
     setError(null);
   }
 
   function handleAssetNumberChange(raw: string) {
     if (assetType === "tractor") {
       setAssetNumber(formatTractorNumber(raw));
-      return;
+    } else {
+      setAssetNumber(raw);
     }
-    setAssetNumber(raw);
+    if (activeUnitKind) setActiveUnitKind("");
+  }
+
+  function handlePhotosChange(next: File[]) {
+    setPhotos(next);
+    setPhotoLocations((prev) => {
+      const aligned = next.map((_, i) => prev[i] ?? null);
+      return aligned;
+    });
+  }
+
+  function toggleReportLocation(value: DamageLocationValue) {
+    setDamageLocations((prev) =>
+      prev.includes(value)
+        ? prev.filter((v) => v !== value)
+        : [...prev, value],
+    );
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -124,6 +189,24 @@ export function DamageCaptureForm({
       setError("Describe the damage in the report comment.");
       return;
     }
+
+    if (isTrailer) {
+      const missing = files.some((_, i) => !photoLocations[i]?.trim());
+      if (missing) {
+        setError("Select a damage location for each photo.");
+        return;
+      }
+    }
+
+    const photoLocs = isTrailer
+      ? files.map((_, i) => photoLocations[i] as DamageLocationValue)
+      : [];
+    const reportLocs = isTrailer
+      ? sanitizeDamageLocations([
+          ...damageLocations,
+          ...photoLocs,
+        ])
+      : [];
 
     setPhase("locating");
 
@@ -172,18 +255,11 @@ export function DamageCaptureForm({
       let loadId: string | null = null;
       let routeNumber: string | null = null;
 
-      if (selectedLoadId) {
-        const linked = recentLoads.find((l) => l.id === selectedLoadId);
-        if (!linked) {
-          setError("Selected load is no longer available. Pick another or None.");
-          setPhase("idle");
-          return;
-        }
-        loadId = linked.id;
-        routeNumber = linked.route_number ?? null;
+      if (selectedLoadId && activeUnit?.loadId === selectedLoadId) {
+        loadId = selectedLoadId;
+        routeNumber = activeUnit.routeNumber ?? null;
       }
 
-      // Hidden metadata for canvas export / Feed (not shown as editable fields).
       const geo = await readGeolocation();
       const capturedAt = new Date().toISOString();
 
@@ -219,6 +295,7 @@ export function DamageCaptureForm({
         r2_key: cover.r2Key,
         r2_url: cover.r2Url,
         report_comment: trimmedComment,
+        damage_locations: reportLocs,
       };
 
       const { data: report, error: insertError } = await supabase
@@ -240,6 +317,7 @@ export function DamageCaptureForm({
         r2_key: u.r2Key,
         r2_url: u.r2Url,
         sort_order: index,
+        damage_location: isTrailer ? photoLocs[index] ?? null : null,
       }));
 
       const { error: photosError } = await supabase
@@ -258,8 +336,6 @@ export function DamageCaptureForm({
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "Submit failed";
-      // TypeError "Failed to fetch" from a bare fetch (should be rare after
-      // uploadDamagePhoto wrapping) — point at CORS / network.
       if (
         err instanceof TypeError &&
         /failed to fetch|networkerror|load failed/i.test(message)
@@ -380,28 +456,37 @@ export function DamageCaptureForm({
 
       <div className="space-y-2">
         <span
-          id="load-link-label"
+          id="active-unit-label"
           className="block text-sm font-medium text-foreground"
         >
-          Link to Active Load Number{" "}
+          Link to Active Trailer/Tractor{" "}
           <span className="font-normal text-muted-foreground">(optional)</span>
         </span>
-        <LoadLinkSelect
-          loads={recentLoads}
-          value={selectedLoadId}
-          onChange={setSelectedLoadId}
-          disabled={busy}
-          labelledBy="load-link-label"
-          currentLoadId={currentLoad?.id ?? null}
+        <ActiveUnitSelect
+          truckNumber={currentTruck}
+          trailerNumber={currentTrailer}
+          value={activeUnitKind}
+          onChange={applyActiveUnit}
+          disabled={busy || !hasActiveUnits}
+          labelledBy="active-unit-label"
         />
+        {!hasActiveUnits ? (
+          <p className="text-xs text-muted-foreground">
+            No active truck or trailer on file. Enter the number manually above.
+          </p>
+        ) : null}
       </div>
 
       <PhotoCapture
         multiple
         values={photos}
-        onChangeMultiple={setPhotos}
+        onChangeMultiple={handlePhotosChange}
         disabled={busy}
         maxFiles={MAX_PHOTOS}
+        locationOptions={isTrailer ? [...DAMAGE_LOCATION_OPTIONS] : undefined}
+        locations={isTrailer ? photoLocations : undefined}
+        onLocationsChange={isTrailer ? setPhotoLocations : undefined}
+        requireLocation={isTrailer}
       />
 
       <div className="space-y-2">
@@ -423,6 +508,47 @@ export function DamageCaptureForm({
           className="w-full resize-y rounded-lg border border-border bg-background px-3 py-3 text-base text-foreground outline-none placeholder:text-muted-foreground focus:border-ring focus:ring-2 focus:ring-ring/30"
         />
       </div>
+
+      {isTrailer ? (
+        <fieldset className="space-y-3">
+          <legend className="text-sm font-medium text-foreground">
+            Damage location{" "}
+            <span className="font-normal text-muted-foreground">(optional)</span>
+          </legend>
+          <p className="text-xs text-muted-foreground">
+            Tag areas for the report. Each photo still needs its own location
+            above.
+          </p>
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            {DAMAGE_LOCATION_OPTIONS.map((opt) => {
+              const checked = damageLocations.includes(opt.value);
+              return (
+                <label
+                  key={opt.value}
+                  className={[
+                    "flex min-h-11 cursor-pointer items-center gap-3 rounded-lg border px-3 py-2.5 text-sm transition",
+                    checked
+                      ? "border-brand bg-brand/10 text-foreground"
+                      : "border-border bg-card text-foreground hover:border-brand/40",
+                    busy ? "opacity-50" : "",
+                  ]
+                    .filter(Boolean)
+                    .join(" ")}
+                >
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    disabled={busy}
+                    onChange={() => toggleReportLocation(opt.value)}
+                    className="size-4 shrink-0 accent-brand"
+                  />
+                  <span>{opt.label}</span>
+                </label>
+              );
+            })}
+          </div>
+        </fieldset>
+      ) : null}
 
       {error ? (
         <p
@@ -450,29 +576,26 @@ export function DamageCaptureForm({
   );
 }
 
-type LoadLinkSelectProps = {
-  loads: RecentLoadOption[];
-  value: string;
-  onChange: (id: string) => void;
+type ActiveUnitSelectProps = {
+  truckNumber: string | null;
+  trailerNumber: string | null;
+  value: ActiveUnitKind;
+  onChange: (kind: ActiveUnitKind) => void;
   disabled?: boolean;
   labelledBy: string;
-  currentLoadId: string | null;
 };
 
-function LoadLinkSelect({
-  loads,
+function ActiveUnitSelect({
+  truckNumber,
+  trailerNumber,
   value,
   onChange,
   disabled,
   labelledBy,
-  currentLoadId,
-}: LoadLinkSelectProps) {
+}: ActiveUnitSelectProps) {
   const listId = useId();
   const rootRef = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
-
-  const selected = loads.find((l) => l.id === value) ?? null;
-  const selectedIsCurrent = Boolean(selected?.isCurrent);
 
   useEffect(() => {
     if (!open) return;
@@ -495,7 +618,7 @@ function LoadLinkSelect({
     };
   }, [open]);
 
-  function selectValue(next: string) {
+  function selectValue(next: ActiveUnitKind) {
     onChange(next);
     setOpen(false);
   }
@@ -508,17 +631,20 @@ function LoadLinkSelect({
     }
   }
 
-  const triggerText = selected
-    ? selected.isCurrent
-      ? `${loadOptionLabel(selected)} (current)`
-      : loadOptionLabel(selected)
-    : "Don't link a load";
+  const triggerText =
+    value === "tractor" && truckNumber
+      ? `Tractor ${truckNumber}`
+      : value === "trailer" && trailerNumber
+        ? `Trailer ${trailerNumber}`
+        : "Don't link active unit";
+
+  const selectedIsActive = value === "tractor" || value === "trailer";
 
   return (
     <div ref={rootRef} className="relative">
       <button
         type="button"
-        id="load-link-trigger"
+        id="active-unit-trigger"
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-controls={listId}
@@ -528,9 +654,9 @@ function LoadLinkSelect({
         onKeyDown={onTriggerKeyDown}
         className={[
           "flex w-full min-h-12 items-center justify-between gap-2 rounded-lg border bg-background px-3 py-3 text-left text-base outline-none focus:border-ring focus:ring-2 focus:ring-ring/30 disabled:opacity-50",
-          selectedIsCurrent
-            ? "border-accent text-accent font-bold"
-            : "border-border text-foreground font-normal",
+          selectedIsActive
+            ? "border-accent font-bold text-accent"
+            : "border-border font-normal text-foreground",
         ].join(" ")}
       >
         <span className="min-w-0 flex-1 truncate">{triggerText}</span>
@@ -559,80 +685,53 @@ function LoadLinkSelect({
               ].join(" ")}
               onClick={() => selectValue("")}
             >
-              Don&apos;t link a load
+              Don&apos;t link active unit
             </button>
           </li>
-          {loads.length === 0 ? (
-            <li className="px-3 py-2.5 text-sm text-muted-foreground">
-              No recent loads found.
+          {truckNumber ? (
+            <li role="presentation">
+              <button
+                type="button"
+                role="option"
+                aria-selected={value === "tractor"}
+                className={[
+                  "flex w-full flex-col gap-0.5 px-3 py-2.5 text-left text-sm",
+                  value === "tractor"
+                    ? "bg-accent/15 font-bold text-accent ring-1 ring-inset ring-accent/40"
+                    : "text-foreground hover:bg-muted/60",
+                ].join(" ")}
+                onClick={() => selectValue("tractor")}
+              >
+                <span>★ Tractor {truckNumber}</span>
+                <span className="text-xs font-medium text-accent/70">
+                  Current truck
+                </span>
+              </button>
             </li>
-          ) : (
-            loads.map((load) => {
-              const isSelected = value === load.id;
-              const isCurrent = load.id === currentLoadId || load.isCurrent;
-              return (
-                <li key={load.id} role="presentation">
-                  <button
-                    type="button"
-                    role="option"
-                    aria-selected={isSelected}
-                    className={[
-                      "flex w-full flex-col gap-0.5 px-3 py-2.5 text-left text-sm",
-                      isCurrent
-                        ? "bg-accent/15 font-bold text-accent ring-1 ring-inset ring-accent/40"
-                        : isSelected
-                          ? "bg-brand/10 text-foreground"
-                          : "text-foreground hover:bg-muted/60",
-                    ].join(" ")}
-                    onClick={() => selectValue(load.id)}
-                  >
-                    <span
-                      className={
-                        isCurrent ? "font-bold text-accent" : undefined
-                      }
-                    >
-                      {isCurrent ? "★ " : ""}
-                      {formatLoadLabel(load.load_number)}
-                      {isCurrent ? " (current)" : ""}
-                    </span>
-                    <span
-                      className={
-                        isCurrent
-                          ? "text-xs font-medium text-accent/70"
-                          : "text-xs font-normal text-muted-foreground"
-                      }
-                    >
-                      {formatShortDate(load.load_date)}
-                      {load.route_number ? ` · Route ${load.route_number}` : ""}
-                      {load.status === "active" ? " · Active" : ""}
-                    </span>
-                  </button>
-                </li>
-              );
-            })
-          )}
+          ) : null}
+          {trailerNumber ? (
+            <li role="presentation">
+              <button
+                type="button"
+                role="option"
+                aria-selected={value === "trailer"}
+                className={[
+                  "flex w-full flex-col gap-0.5 px-3 py-2.5 text-left text-sm",
+                  value === "trailer"
+                    ? "bg-accent/15 font-bold text-accent ring-1 ring-inset ring-accent/40"
+                    : "text-foreground hover:bg-muted/60",
+                ].join(" ")}
+                onClick={() => selectValue("trailer")}
+              >
+                <span>★ Trailer {trailerNumber}</span>
+                <span className="text-xs font-medium text-accent/70">
+                  Current trailer
+                </span>
+              </button>
+            </li>
+          ) : null}
         </ul>
       ) : null}
-
-      {/* Keep a native select for progressive enhancement / form semantics */}
-      <select
-        name="loadId"
-        value={value}
-        disabled={disabled}
-        tabIndex={-1}
-        aria-hidden
-        className="sr-only"
-        onChange={(e) => onChange(e.target.value)}
-      >
-        <option value="">Don&apos;t link a load</option>
-        {loads.map((load) => (
-          <option key={load.id} value={load.id}>
-            {load.isCurrent
-              ? `★ ${formatLoadLabel(load.load_number)} (current)`
-              : formatLoadLabel(load.load_number)}
-          </option>
-        ))}
-      </select>
     </div>
   );
 }

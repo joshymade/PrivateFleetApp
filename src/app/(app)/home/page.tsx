@@ -131,6 +131,7 @@ export default async function HomePage() {
     let days: string[];
     let payDayDate: string | null = null;
     let rangeLabel: string;
+    let depositLabel: string | null = null;
 
     if (periodMode && nextPayDate && payPeriodStart) {
       const period = currentPayPeriod(today, payPeriodStart, nextPayDate);
@@ -141,7 +142,8 @@ export default async function HomePage() {
       // Header still shows this period's upcoming deposit (Fri end + 6).
       const inRangeDeposit = depositDayInPeriod(period.start);
       payDayDate = days.includes(inRangeDeposit) ? inRangeDeposit : null;
-      rangeLabel = `${formatPayPeriodLabel(period.start, period.end)} · Ends ${formatCardMonthDay(period.end)} · Deposit ${formatCardMonthDay(period.payDay)}`;
+      rangeLabel = formatPayPeriodLabel(period.start, period.end);
+      depositLabel = formatCardMonthDay(period.payDay);
     } else {
       rangeStart = workWeekStart(today, weekStartDay);
       days = workWeekDays(rangeStart);
@@ -149,8 +151,12 @@ export default async function HomePage() {
       rangeLabel = formatWeekLabel(rangeStart);
     }
 
-    // Look back so "previous work day" reminders work across period boundaries.
-    const lookbackStart = addCalendarDays(rangeStart, -14);
+    // Look back one biweekly period so "previous work day" reminders
+    // work across period boundaries.
+    const lookbackStart = addCalendarDays(
+      rangeStart,
+      -DEFAULT_PAY_PERIOD_LENGTH_DAYS,
+    );
 
     const [
       lookbackLoads,
@@ -234,6 +240,7 @@ export default async function HomePage() {
     workWeekSection = (
       <WorkWeekHome
         weekLabel={rangeLabel}
+        depositLabel={depositLabel}
         days={daySummaries}
         stats={{
           periodLoads: periodStats.loadCount,

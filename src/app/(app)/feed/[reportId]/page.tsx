@@ -19,6 +19,9 @@ import {
 } from "@/components/ui/page-title";
 import { canViewDriverId } from "@/lib/auth/driver-id-visibility";
 import { isAnonymousReporter } from "@/lib/damage/anonymous";
+import {
+  formatDamageLocationLabels,
+} from "@/lib/damage/locations";
 import { damagePhotoUrl } from "@/lib/damage-photo";
 import { feedUnitHref } from "@/lib/feed/asset-number";
 import {
@@ -27,6 +30,7 @@ import {
 } from "@/lib/feed/safety-status";
 import {
   feedReportAssetLabel,
+  feedUnitNumberClassName,
   isTypedTrailerNumber,
 } from "@/lib/feed/trailer-unit-type";
 import { truncateFeedDescription } from "@/lib/feed/truncate";
@@ -122,7 +126,7 @@ export default async function FeedReportDetailPage({ params }: PageProps) {
       .maybeSingle(),
     supabase
       .from("damage_report_photos")
-      .select("id, damage_report_id, r2_key, r2_url, sort_order, created_at")
+      .select("id, damage_report_id, r2_key, r2_url, sort_order, damage_location, created_at")
       .eq("damage_report_id", reportId)
       .order("sort_order", { ascending: true }),
     supabase
@@ -142,14 +146,25 @@ export default async function FeedReportDetailPage({ params }: PageProps) {
   }
 
   const gallery = (photoRows ?? []) as DamageReportPhoto[];
-  const photoUrls =
+  const galleryPhotos =
     gallery.length > 0
       ? gallery
-          .map((p) => damagePhotoUrl(p.r2_url, p.r2_key))
-          .filter((u): u is string => Boolean(u))
+          .map((p) => {
+            const url = damagePhotoUrl(p.r2_url, p.r2_key);
+            if (!url) return null;
+            return {
+              url,
+              damageLocation: p.damage_location ?? null,
+            };
+          })
+          .filter((p): p is { url: string; damageLocation: string | null } =>
+            Boolean(p),
+          )
       : (() => {
           const cover = damagePhotoUrl(row.r2_url, row.r2_key);
-          return cover ? [cover] : [];
+          return cover
+            ? [{ url: cover, damageLocation: null as string | null }]
+            : [];
         })();
 
   const noticeRows = notices ?? [];
@@ -265,12 +280,7 @@ export default async function FeedReportDetailPage({ params }: PageProps) {
   const safetyStatusClass = safetyInboxStatusClassName(inboxStatus);
   const typeLabel = feedReportAssetLabel(row.asset_type, row.asset_number);
   const typedTrailer = isTypedTrailerNumber(row.asset_type, row.asset_number);
-  const numberClass =
-    row.asset_type === "tractor"
-      ? "font-bold text-brand hover:underline"
-      : typedTrailer
-        ? `font-bold ${pageTitleColorClassName} hover:underline`
-        : "font-bold text-accent hover:underline";
+  const numberClass = `${feedUnitNumberClassName} hover:underline`;
 
   return (
     <main className="mx-auto w-full max-w-lg px-4 pb-8 pt-4">
@@ -341,9 +351,9 @@ export default async function FeedReportDetailPage({ params }: PageProps) {
         </p>
       </header>
 
-      {photoUrls.length > 0 ? (
+      {galleryPhotos.length > 0 ? (
         <ReportPhotoGallery
-          urls={photoUrls}
+          photos={galleryPhotos}
           altPrefix={`${typeLabel} ${row.asset_number} damage`}
         />
       ) : (
@@ -398,6 +408,28 @@ export default async function FeedReportDetailPage({ params }: PageProps) {
         </section>
       ) : null}
 
+      {(() => {
+        const locationLabels = formatDamageLocationLabels(row.damage_locations);
+        if (locationLabels.length === 0) return null;
+        return (
+          <section className="mt-4">
+            <h2 className="text-sm font-medium text-muted-foreground">
+              Damage location
+            </h2>
+            <ul className="mt-2 grid grid-cols-2 gap-2">
+              {locationLabels.map((label) => (
+                <li
+                  key={label}
+                  className="rounded-lg border border-border bg-card px-3 py-2.5 text-center text-sm font-medium text-foreground"
+                >
+                  {label}
+                </li>
+              ))}
+            </ul>
+          </section>
+        );
+      })()}
+
       <div className="mt-6 flex flex-col gap-3">
         {showNotice ? (
           <NoticeButton
@@ -423,7 +455,7 @@ export default async function FeedReportDetailPage({ params }: PageProps) {
           href={`/export?reportId=${encodeURIComponent(row.id)}&autodownload=1`}
           className="min-h-11 rounded-lg border border-border px-4 py-2.5 text-center text-sm font-medium text-foreground"
         >
-          Report Export
+          Save Report To Phone
         </Link>
         {isAdmin ? <DeleteReportButton reportId={row.id} /> : null}
       </div>

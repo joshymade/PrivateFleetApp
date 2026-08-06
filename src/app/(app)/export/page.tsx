@@ -30,12 +30,13 @@ type ReportRow = Pick<
   | "longitude"
   | "route_number"
   | "report_comment"
+  | "damage_locations"
   | "r2_key"
   | "r2_url"
 > & {
   damage_report_photos?: Pick<
     DamageReportPhoto,
-    "id" | "r2_key" | "r2_url" | "sort_order"
+    "id" | "r2_key" | "r2_url" | "sort_order" | "damage_location"
   >[] | null;
 };
 
@@ -70,7 +71,7 @@ export default async function ExportPage({ searchParams }: PageProps) {
   }
 
   const reportSelect =
-    "id, asset_type, asset_number, driver_id, reported_by, captured_at, latitude, longitude, route_number, report_comment, r2_key, r2_url, damage_report_photos(id, r2_key, r2_url, sort_order)";
+    "id, asset_type, asset_number, driver_id, reported_by, captured_at, latitude, longitude, route_number, report_comment, damage_locations, r2_key, r2_url, damage_report_photos(id, r2_key, r2_url, sort_order, damage_location)";
 
   const { data, error } = await supabase
     .from("damage_reports")
@@ -125,6 +126,7 @@ export default async function ExportPage({ searchParams }: PageProps) {
             r2_key: p.r2_key,
             photo_url: damagePhotoUrl(p.r2_url, p.r2_key),
             sort_order: p.sort_order,
+            damage_location: p.damage_location ?? null,
           }))
         : r.r2_key
           ? [
@@ -132,6 +134,7 @@ export default async function ExportPage({ searchParams }: PageProps) {
                 r2_key: r.r2_key,
                 photo_url: damagePhotoUrl(r.r2_url, r.r2_key),
                 sort_order: 0,
+                damage_location: null as string | null,
               },
             ]
           : [];
@@ -152,6 +155,7 @@ export default async function ExportPage({ searchParams }: PageProps) {
       longitude: r.longitude,
       route_number: r.route_number,
       report_comment: r.report_comment,
+      damage_locations: r.damage_locations ?? [],
       photos,
     };
   }

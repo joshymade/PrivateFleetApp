@@ -18,7 +18,7 @@ export function trailerUnitKindFromNumber(
 }
 
 export function trailerUnitKindLabel(kind: TrailerUnitKind): string {
-  return kind === "dry_van" ? "dry van" : "reefer";
+  return kind === "dry_van" ? "Dry Van" : "Reefer";
 }
 
 /** Type text before the unit number in feed report titles. */
@@ -33,8 +33,13 @@ export function feedReportAssetLabel(
 }
 
 /**
- * Whether this trailer should use theme brand/contrast number coloring
- * (`text-brand` light / `text-accent` dark via pageTitleColorClassName).
+ * Brand gold for unit numbers in feed / report / unit-history titles
+ * (Texas gold `--accent` in both light and dark).
+ */
+export const feedUnitNumberClassName = "font-bold text-accent";
+
+/**
+ * Whether this trailer has a typed kind (Dry Van / Reefer) from its number prefix.
  */
 export function isTypedTrailerNumber(
   assetType: AssetType,

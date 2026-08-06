@@ -2,6 +2,10 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import { compositeDamageJpg } from "@/lib/canvas-export";
+import {
+  damageLocationLabel,
+  formatDamageLocationLabels,
+} from "@/lib/damage/locations";
 import type { AssetType } from "@/types/database";
 
 export type ExportPhotoOption = {
@@ -9,6 +13,8 @@ export type ExportPhotoOption = {
   /** Preview only (public R2 URL). Export loads via same-origin proxy. */
   photo_url: string | null;
   sort_order: number;
+  /** Stable damage location key for this photo. */
+  damage_location?: string | null;
 };
 
 export type ExportReportOption = {
@@ -25,6 +31,8 @@ export type ExportReportOption = {
   longitude: number | null;
   route_number: string | null;
   report_comment: string | null;
+  /** Report-level location keys (fallback strip labels). */
+  damage_locations?: string[] | null;
   photos: ExportPhotoOption[];
 };
 
@@ -154,6 +162,12 @@ export function ExportForm({
           const photo = photos[i]!;
           setProgress({ current: i + 1, total });
           const imageBlob = await loadPhotoBlob(photo.r2_key);
+          const photoLoc = photo.damage_location
+            ? damageLocationLabel(photo.damage_location)
+            : null;
+          const reportLocs = formatDamageLocationLabels(
+            report.damage_locations,
+          );
           const jpg = await compositeDamageJpg(imageBlob, {
             assetNumber: report.asset_number,
             assetTypeLabel: assetLabel(report.asset_type),
@@ -165,6 +179,9 @@ export function ExportForm({
             longitude: report.longitude,
             routeNumber: report.route_number,
             reportComment: report.report_comment,
+            damageLocationLabel:
+              photoLoc ||
+              (reportLocs.length > 0 ? reportLocs.join(", ") : null),
           });
           const name = `${report.asset_type}-${assetPart}-${i + 1}.jpg`;
           downloadBlob(jpg, name);
