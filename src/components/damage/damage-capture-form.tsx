@@ -170,10 +170,6 @@ export function DamageCaptureForm({
       setError("Add at least one damage photo before submitting.");
       return;
     }
-    if (!trimmedComment) {
-      setError("Describe the damage in the report comment.");
-      return;
-    }
 
     const missing = files.some((_, i) => !photoLocations[i]?.trim());
     if (missing) {
@@ -272,7 +268,7 @@ export function DamageCaptureForm({
         captured_at: capturedAt,
         r2_key: cover.r2Key,
         r2_url: cover.r2Url,
-        report_comment: trimmedComment,
+        report_comment: trimmedComment || null,
         damage_locations: reportLocs,
       };
 
@@ -455,26 +451,6 @@ export function DamageCaptureForm({
         ) : null}
       </div>
 
-      <div className="space-y-2">
-        <label
-          htmlFor="report-comment"
-          className="block text-sm font-medium text-foreground"
-        >
-          Damage description
-        </label>
-        <textarea
-          id="report-comment"
-          name="reportComment"
-          value={reportComment}
-          onChange={(e) => setReportComment(e.target.value)}
-          disabled={busy}
-          required
-          rows={4}
-          placeholder="Describe what you see (location on unit, severity, etc.)"
-          className="w-full resize-y rounded-lg border border-border bg-background px-3 py-3 text-base text-foreground outline-none placeholder:text-muted-foreground focus:border-ring focus:ring-2 focus:ring-ring/30"
-        />
-      </div>
-
       <PhotoCapture
         multiple
         values={photos}
@@ -486,6 +462,26 @@ export function DamageCaptureForm({
         onLocationsChange={setPhotoLocations}
         requireLocation
       />
+
+      <div className="space-y-2">
+        <label
+          htmlFor="report-comment"
+          className="block text-sm font-medium text-foreground"
+        >
+          Damage description{" "}
+          <span className="font-normal text-muted-foreground">(optional)</span>
+        </label>
+        <textarea
+          id="report-comment"
+          name="reportComment"
+          value={reportComment}
+          onChange={(e) => setReportComment(e.target.value)}
+          disabled={busy}
+          rows={4}
+          placeholder="Describe what you see (location on unit, severity, etc.)"
+          className="w-full resize-y rounded-lg border border-border bg-background px-3 py-3 text-base text-foreground outline-none placeholder:text-muted-foreground focus:border-ring focus:ring-2 focus:ring-ring/30"
+        />
+      </div>
 
       {error ? (
         <p

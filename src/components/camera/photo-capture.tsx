@@ -342,9 +342,7 @@ export function PhotoCapture({
                           : "border-border",
                       ].join(" ")}
                     >
-                      <option value="">
-                        {requireLocation ? "Location required…" : "Location…"}
-                      </option>
+                      <option value="">Damage location</option>
                       {locationOptions.map((opt) => (
                         <option key={opt.value} value={opt.value}>
                           {opt.label}

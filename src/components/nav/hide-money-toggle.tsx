@@ -8,13 +8,13 @@ const HIDE_MONEY_HELP =
   "Hide your financial information across the entire app. Earnings and money amounts are replaced with dots until you show them again.";
 
 /**
- * Eye toggle under the notification bell — persists hide-money preference.
+ * Eye toggle beside the notification bell — persists hide-money preference.
  */
 export function HideMoneyToggle() {
   const { hideMoney, toggleHideMoney } = useHideMoney();
 
   return (
-    <div className="flex items-center justify-end gap-1">
+    <div className="flex items-center gap-1">
       <button
         type="button"
         onClick={toggleHideMoney}
@@ -23,12 +23,12 @@ export function HideMoneyToggle() {
           hideMoney ? "Show earnings and money amounts" : "Hide earnings and money amounts"
         }
         title={hideMoney ? "Show money" : "Hide money"}
-        className="inline-flex size-9 items-center justify-center rounded-xl border border-border bg-background text-muted-foreground outline-none transition-colors hover:bg-muted/60 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/40"
+        className="relative inline-flex min-h-11 min-w-11 items-center justify-center rounded-full text-muted-foreground ring-1 ring-border transition-colors hover:bg-muted/60 hover:text-foreground"
       >
         {hideMoney ? (
-          <EyeOff className="size-4" aria-hidden />
+          <EyeOff className="h-5 w-5" aria-hidden />
         ) : (
-          <Eye className="size-4" aria-hidden />
+          <Eye className="h-5 w-5" aria-hidden />
         )}
       </button>
       <ClickableTooltip
